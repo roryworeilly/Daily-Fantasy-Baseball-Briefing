@@ -11,13 +11,13 @@
     <!-- Run the briefing via the project venv Python -->
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/roryoreilly/Desktop/FB/.venv/bin/python</string>
-        <string>/Users/roryoreilly/Desktop/FB/run_briefing.py</string>
+        <string>__FB_DIR__/.venv/bin/python</string>
+        <string>__FB_DIR__/run_briefing.py</string>
     </array>
 
     <!-- Working directory so relative paths inside the script resolve correctly -->
     <key>WorkingDirectory</key>
-    <string>/Users/roryoreilly/Desktop/FB</string>
+    <string>__FB_DIR__</string>
 
     <!-- Fire every day at 7:00 AM local time -->
     <key>StartCalendarInterval</key>
@@ -30,9 +30,9 @@
 
     <!-- Log stdout/stderr so you can inspect any run errors -->
     <key>StandardOutPath</key>
-    <string>/Users/roryoreilly/Desktop/FB/output/briefing_run.log</string>
+    <string>__FB_DIR__/output/briefing_run.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/roryoreilly/Desktop/FB/output/briefing_error.log</string>
+    <string>__FB_DIR__/output/briefing_error.log</string>
 
     <!-- If the Mac was asleep at 7 AM, run as soon as it wakes -->
     <key>RunAtLoad</key>

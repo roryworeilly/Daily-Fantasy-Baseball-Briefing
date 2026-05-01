@@ -3,7 +3,7 @@ Build / refresh player_reference_cache.json
 ────────────────────────────────────────────
 Run once from the FB directory with the project venv:
 
-    cd /Users/roryoreilly/Desktop/FB
+    cd /path/to/FB
     .venv/bin/python tools/build_reference_cache.py
 
 Options:

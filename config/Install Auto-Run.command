@@ -8,7 +8,7 @@
 PLIST_NAME="com.rory.fantasybriefing"
 PLIST_SRC="$(dirname "$0")/${PLIST_NAME}.plist"
 PLIST_DEST="$HOME/Library/LaunchAgents/${PLIST_NAME}.plist"
-FB_DIR="$(dirname "$0")"
+FB_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 VENV_PYTHON="$FB_DIR/.venv/bin/python"
 
 echo ""
@@ -45,6 +45,7 @@ fi
 # ── Copy plist to LaunchAgents ────────────────────────────────────
 mkdir -p "$HOME/Library/LaunchAgents"
 cp "$PLIST_SRC" "$PLIST_DEST"
+sed -i '' "s|__FB_DIR__|${FB_DIR}|g" "$PLIST_DEST"
 chmod 644 "$PLIST_DEST"
 echo "→  Installed plist to:"
 echo "   $PLIST_DEST"

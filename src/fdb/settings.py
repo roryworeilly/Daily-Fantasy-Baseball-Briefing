@@ -79,11 +79,11 @@ def _load_env_file(path):
 
 _load_env_file(os.path.join(SCRIPT_DIR, ".env"))
 
-LEAGUE_ID    = int(os.environ.get("LEAGUE_ID",    "1457877076"))
+LEAGUE_ID    = int(os.environ.get("LEAGUE_ID",    "0"))
 YEAR         = int(os.environ.get("YEAR",          "2026"))
 SWID         = os.environ.get("ESPN_SWID",         "")
 ESPN_S2      = os.environ.get("ESPN_S2",           "")
-MY_TEAM_NAME = os.environ.get("MY_TEAM_NAME",      "The Undisputed")
+MY_TEAM_NAME = os.environ.get("MY_TEAM_NAME",      "")
 N_TEAMS      = int(os.environ.get("N_TEAMS",       "14"))
 
 # ── Scoring rules ─────────────────────────────────────────────────────────────

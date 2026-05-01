@@ -1,0 +1,47 @@
+name: CI
+
+# Runs on every push and pull request targeting main.
+# NOTE: Integration tests that contact the ESPN API are skipped in CI because
+# they require private credentials (LEAGUE_ID, ESPN_SWID, ESPN_S2).
+# All tests in test/ are pure unit tests and run without any credentials.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Unit Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Install runtime deps (pybaseball is optional; skip if build fails)
+          pip install -r dep/requirements.txt --ignore-requires-python || \
+          pip install espn-api requests requests-cache certifi
+          # Install dev deps
+          pip install -r dep/requirements-dev.txt
+
+      - name: Run unit tests with coverage
+        run: |
+          pytest test/ -v --cov=src/fdb --cov-report=term-missing
+
+      - name: Lint with flake8
+        run: |
+          flake8 src/ tools/ test/ --max-line-length=120 --extend-ignore=E203,W503

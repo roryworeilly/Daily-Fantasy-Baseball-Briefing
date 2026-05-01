@@ -1,0 +1,17 @@
+# Fantasy Baseball Daily Briefing — runtime dependencies
+#
+# Install with:
+#   pip install -r dep/requirements.txt
+
+# ESPN Fantasy API client
+espn-api>=0.36
+
+# HTTP + caching
+requests>=2.28
+requests-cache>=1.1
+certifi>=2024.1
+
+# pybaseball is optional but strongly recommended.
+# It enables Statcast metrics, FanGraphs projections, and Baseball Reference stats.
+# Comment out if you cannot install it (e.g. restricted environments).
+pybaseball>=2.2

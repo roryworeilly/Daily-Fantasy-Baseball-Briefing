@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+
+    <!-- Job label — must be unique on this Mac -->
+    <key>Label</key>
+    <string>com.rory.fantasybriefing</string>
+
+    <!-- Run the briefing via the project venv Python -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/roryoreilly/Desktop/FB/.venv/bin/python</string>
+        <string>/Users/roryoreilly/Desktop/FB/run_briefing.py</string>
+    </array>
+
+    <!-- Working directory so relative paths inside the script resolve correctly -->
+    <key>WorkingDirectory</key>
+    <string>/Users/roryoreilly/Desktop/FB</string>
+
+    <!-- Fire every day at 7:00 AM local time -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>7</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <!-- Log stdout/stderr so you can inspect any run errors -->
+    <key>StandardOutPath</key>
+    <string>/Users/roryoreilly/Desktop/FB/output/briefing_run.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/roryoreilly/Desktop/FB/output/briefing_error.log</string>
+
+    <!-- If the Mac was asleep at 7 AM, run as soon as it wakes -->
+    <key>RunAtLoad</key>
+    <false/>
+
+</dict>
+</plist>

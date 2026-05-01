@@ -1,0 +1,11 @@
+# Fantasy Baseball Daily Briefing — development/test dependencies
+#
+# Install with:
+#   pip install -r dep/requirements.txt -r dep/requirements-dev.txt
+
+# Test runner
+pytest>=8.0
+pytest-cov>=4.0
+
+# Linting
+flake8>=7.0

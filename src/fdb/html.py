@@ -5914,6 +5914,9 @@ def render_html(data):
         trailing = s[last_close + 6:].strip()
         return (inner + trailing) if trailing else inner
 
+    # ── Season Pace tab ──────────────────────────────────────────────────────
+    tab_seasonpace = _season_pace_tab(data.get("season_pace", {}))
+
     # ── Tools tab (Analytics | Season Pace | Trade consolidated) ────────
     tab_tools = (
         '<div class="tab-pane" data-tab="tools">'
@@ -5938,9 +5941,6 @@ def render_html(data):
         '</div>'
         '</div>'
     )
-
-    # ── Season Pace tab ──────────────────────────────────────────────────────
-    tab_seasonpace = _season_pace_tab(data.get("season_pace", {}))
 
     # ── Lineup Lab tab ───────────────────────────────────────────────────────
     tab_lineuplab = _lineup_lab_tab(data.get("lineup_lab", {}))

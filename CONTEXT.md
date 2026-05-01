@@ -1,4 +1,4 @@
-# FDB — Claude Context Document
+# FDB — Context Document
 
 > **Purpose:** Read this at the start of every new session before touching any code.
 > Keep it updated whenever the architecture, public APIs, or UI structure changes.

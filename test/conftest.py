@@ -31,6 +31,12 @@ sys.modules["espn_api.baseball.player"].Player = MagicMock
 for _mod in ("pybaseball",):
     if _mod not in sys.modules:
         sys.modules[_mod] = types.ModuleType(_mod)
+_pybaseball = sys.modules["pybaseball"]
+_pybaseball.statcast_batter_expected_stats = MagicMock()
+_pybaseball.statcast_batter_exitvelo_barrels = MagicMock()
+_pybaseball.statcast_sprint_speed = MagicMock()
+_pybaseball.statcast_pitcher_expected_stats = MagicMock()
+_pybaseball.statcast_pitcher_exitvelo_barrels = MagicMock()
 
 # dotenv — settings.py may try to import it
 if "dotenv" not in sys.modules:

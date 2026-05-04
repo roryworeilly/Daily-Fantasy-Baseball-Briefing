@@ -1,0 +1,22 @@
+[flake8]
+max-line-length = 120
+extend-ignore = E203,W503
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    src/fdb/html.py,
+    src/fdb/model.py,
+    src/fdb/run.py,
+    src/fdb/settings.py,
+    src/fdb/simulate.py,
+    tools/build_projection_cache.py,
+    tools/build_reference_cache.py,
+    tools/build_statcast_cache.py,
+    tools/generate_draft_logs.py,
+    tools/model_comparison.py,
+    test/conftest.py,
+    test/test_model_scoring.py,
+    test/test_scoring.py,
+    test/test_simulate.py,
+    test/test_utils.py

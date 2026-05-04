@@ -44,4 +44,4 @@ jobs:
 
       - name: Lint with flake8
         run: |
-          flake8 src/ tools/ test/ --max-line-length=120 --extend-ignore=E203,W503
+          flake8 src/ tools/ test/

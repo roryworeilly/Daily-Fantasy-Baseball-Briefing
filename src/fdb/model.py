@@ -179,6 +179,11 @@ def get_player_headshot_url_mlb(player):
 _SC_NAME_TO_MLBAM: dict[str, str] = {}
 
 
+def get_statcast_name_index_size() -> int:
+    """Expose the Statcast name-index size for runtime cache validation."""
+    return len(_SC_NAME_TO_MLBAM)
+
+
 def get_mlbam_id(player):
     """
     Return the MLBAM (MLB Stats API) player ID as a string, or '' if unavailable.
@@ -757,16 +762,30 @@ def load_statcast_db():
 
         # Build name → MLBAM reverse index from both batter and pitcher entries
         idx: dict[str, str] = {}
+        nameless_b = 0
+        nameless_p = 0
         for mlbam, entry in data.get("batters",  {}).items():
             nm = normalize_name(entry.get("name", ""))
             if nm:
                 idx[nm] = str(mlbam)
+            else:
+                nameless_b += 1
         for mlbam, entry in data.get("pitchers", {}).items():
             nm = normalize_name(entry.get("name", ""))
             if nm:
                 idx[nm] = str(mlbam)
+            else:
+                nameless_p += 1
         _SC_NAME_TO_MLBAM = idx
-        print(f"  Statcast DB: built name→MLBAM index ({len(idx)} entries)")
+        if nameless_b or nameless_p:
+            print(
+                "  Statcast DB warning: "
+                f"{nameless_b} batter rows and {nameless_p} pitcher rows have no player name"
+            )
+        if idx:
+            print(f"  Statcast DB: built name→MLBAM index ({len(idx)} entries)")
+        else:
+            print("  Statcast DB warning: name→MLBAM index is empty; Statcast matching is disabled")
     except Exception as e:
         print(f"  Statcast DB: load failed ({e})")
 
@@ -902,6 +921,26 @@ def load_current_season_db():
                     return
         except Exception:
             pass
+
+    def _load_stale_cache(reason: str) -> bool:
+        """Fall back to a same-season stale cache when live refresh is unavailable."""
+        if not os.path.exists(_CURRENT_SEASON_DB_PATH):
+            return False
+        try:
+            with open(_CURRENT_SEASON_DB_PATH) as f:
+                data = json.load(f)
+            if data.get("season") != YEAR:
+                return False
+            if not data.get("hitters") and not data.get("pitchers"):
+                return False
+            age_h = (_time.time() - os.path.getmtime(_CURRENT_SEASON_DB_PATH)) / 3600
+            _CURRENT_SEASON_DB.update(data)
+            _CURRENT_SEASON_DB["loaded"] = True
+            print(f"  Current Season DB: using stale cache ({age_h:.1f}h old) after {reason}")
+            return True
+        except Exception as exc:
+            print(f"  Current Season DB: stale-cache fallback failed ({type(exc).__name__}: {exc})")
+            return False
 
     # ── Helper: parse one row from any source into a standardised hitter dict ──
     def _parse_hitter_row(row: dict) -> dict | None:
@@ -1143,6 +1182,8 @@ def load_current_season_db():
                 pitchers[parsed.pop("name")] = parsed
 
         if not hitters and not pitchers:
+            if _load_stale_cache("live refresh returned no rows"):
+                return
             print("  Current Season DB: all sources returned empty — using preseason only")
             return
 
@@ -1163,6 +1204,8 @@ def load_current_season_db():
         )
 
     except Exception as e:
+        if _load_stale_cache(f"fetch failure ({type(e).__name__}: {e})"):
+            return
         print(f"  Current Season DB: fetch failed ({type(e).__name__}: {e}) — using preseason only")
 
 

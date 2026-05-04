@@ -72,21 +72,59 @@ def _player_name(row) -> str:
 
     Returns: "First Last" string, or "" if nothing useful found.
     """
+    def _clean(raw) -> str:
+        text = str(raw or "").strip()
+        if not text or text.lower() in {"nan", "none"}:
+            return ""
+        return " ".join(text.split())
+
+    def _from_last_first(raw) -> str:
+        raw = _clean(raw)
+        if not raw:
+            return ""
+        if "," in raw:
+            last, first = raw.split(",", 1)
+            return _clean(f"{first} {last}")
+        return raw
+
     # 1) Separate first/last columns (some endpoints include these)
-    first = str(row.get("first_name", "") or "").strip()
-    last  = str(row.get("last_name",  "") or "").strip()
+    first = _clean(
+        row.get("first_name")
+        or row.get("first name")
+        or row.get("player_first_name")
+    )
+    last = _clean(
+        row.get("last_name")
+        or row.get("last name")
+        or row.get("player_last_name")
+    )
     if first or last:
         return f"{first} {last}".strip()
 
-    # 2) 'player_name' = "Last, First" format (most Baseball Savant endpoints)
-    raw = str(row.get("player_name", row.get("name", "")) or "").strip()
-    if not raw:
-        return ""
-    if "," in raw:
-        # "Last, First" → "First Last"
-        parts = raw.split(",", 1)
-        return f"{parts[1].strip()} {parts[0].strip()}"
-    return raw  # already "First Last"
+    # 2) Single-column display names from Baseball Savant / pybaseball
+    for key in (
+        "player_name",
+        "player name",
+        "name_display_first_last",
+        "full_name",
+        "full name",
+        "name",
+    ):
+        name = _from_last_first(row.get(key))
+        if name:
+            return name
+
+    # 3) Some CSV exports use a combined "Last, First" column label
+    for key in (
+        "last_name, first_name",
+        "last name, first name",
+        "lastname, firstname",
+    ):
+        name = _from_last_first(row.get(key))
+        if name:
+            return name
+
+    return ""
 
 def _gap(actual, expected):
     """Return expected - actual gap (positive = underperformer / buy-low)."""
@@ -326,6 +364,16 @@ def main():
 
     print("\nLoading pitcher Statcast data...")
     pitchers = load_pitcher_data(season)
+
+    if not batters and not pitchers:
+        print("\n  ✗ All Statcast fetches failed — cache not updated.\n")
+        return
+
+    named_entries = sum(1 for e in batters.values() if e.get("name")) + \
+                    sum(1 for e in pitchers.values() if e.get("name"))
+    if named_entries == 0:
+        print("\n  ✗ Statcast data contained no player names — cache not updated.\n")
+        return
 
     # Attach signal classifications
     for entry in batters.values():

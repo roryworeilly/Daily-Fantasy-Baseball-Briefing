@@ -64,7 +64,7 @@ The generated HTML report opens automatically (or is written to the `output/` di
 Copy `.env.example` to `.env` and populate the following variables:
 
 | Variable | Required | Description |
-|---|---|---|
+| --- | --- | --- |
 | `LEAGUE_ID` | Yes | Your ESPN fantasy league ID (visible in the league URL) |
 | `YEAR` | Yes | The current season year (e.g. `2026`) |
 | `MY_TEAM_NAME` | Yes | The exact name of your team in ESPN — used to personalise the report |
@@ -140,15 +140,17 @@ FB/
 
 ## Cache Files
 
-FDB maintains several JSON caches in the project root to avoid re-fetching slow external APIs on every run. They are automatically rebuilt when stale (default TTL: 7 days).
+FDB maintains several JSON caches in the project root to avoid re-fetching slow external APIs on every run. They are automatically rebuilt when stale (default TTL: 7 days), and the runtime now validates the Statcast cache structure before using it.
 
 | File | Contents | Rebuilt by |
-|---|---|---|
+| --- | --- | --- |
 | `statcast_cache.json` | Per-player Statcast metrics (xwOBA, xERA, barrel%, exit velocity, sprint speed, breakout/regression signal) | `tools/build_statcast_cache.py` |
 | `projection_cache.json` | Steamer + ZiPS consensus projections keyed by normalised player name | `tools/build_projection_cache.py` |
 | `player_reference_cache.json` | MLBAM ID ↔ player name cross-reference | `tools/build_reference_cache.py` |
 | `current_season_cache.json` | In-season cumulative stats | Auto-rebuilt by `run.py` |
 | `espn_cache.sqlite` | Short-lived SQLite cache for ESPN API HTTP responses (10-minute TTL) | `requests-cache` |
+
+If live current-season refresh fails, `run.py` now reuses the last same-season `current_season_cache.json` snapshot rather than dropping straight to preseason-only data. If the Statcast cache loads with player rows but no usable player-name index, the runtime warns and attempts a forced rebuild instead of silently accepting degraded matching.
 
 To force a full cache rebuild:
 
@@ -182,6 +184,14 @@ pytest test/ -v
 pytest test/ --cov=src/fdb --cov-report=term-missing
 ```
 
+### Run lint checks
+
+```bash
+flake8 src/ tools/ test/
+```
+
+The repo includes a shared `.flake8` baseline so CI linting stays green while legacy/generated modules are excluded from style enforcement. Tighten that exclude list incrementally as those files are cleaned up.
+
 ### Rebuild all caches manually
 
 ```bash
@@ -198,7 +208,7 @@ Batting and pitching scoring weights live in `src/fdb/settings.py` as `BATTING_S
 
 ## Contributing
 
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+Contributions are welcome! Please read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening a pull request.
 
 For bug reports and feature requests, use the [GitHub Issues](../../issues) templates.
 

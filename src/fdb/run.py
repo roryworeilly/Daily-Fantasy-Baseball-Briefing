@@ -18,6 +18,7 @@ from fdb.model import (
     build_payload,
     build_score_scaling,
     connect,
+    get_statcast_name_index_size,
     load_reference_db,
     load_statcast_db,
     load_projection_db,
@@ -73,6 +74,8 @@ def _auto_rebuild_cache(
         else:
             # Legacy modules that expose a top-level main() with no arguments
             sys.argv = [sys.argv[0]]
+            if force:
+                sys.argv.append("--force")
             mod.main()
     except Exception as exc:
         print(f"  {label} cache rebuild failed (non-fatal): {exc}")
@@ -145,6 +148,10 @@ def main() -> None:
 
         print("Loading Statcast cache (Phase 2 advanced metrics)...")
         load_statcast_db()
+        if os.path.exists(_STATCAST_CACHE) and get_statcast_name_index_size() == 0:
+            print("  Statcast cache validation failed (empty name index) — forcing rebuild...")
+            _auto_rebuild_cache("build_statcast_cache", _STATCAST_CACHE, "", force=True)
+            load_statcast_db()
 
         print("Loading projection cache (Phase 3 — Steamer/ZiPS)...")
         load_projection_db()

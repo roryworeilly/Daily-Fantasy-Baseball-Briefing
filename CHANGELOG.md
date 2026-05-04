@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Repo-level `.flake8` baseline so CI linting can enforce maintained files without failing on the known legacy/generated modules and older test fixtures
+
+### Changed
+- GitHub Actions lint step now reads the shared repo flake8 configuration instead of hard-coding lint flags in the workflow
+
+### Fixed
+- `run.py` now validates the loaded Statcast cache and can force a real legacy rebuild by passing `--force` through to cache builder modules that expose `main()`
+- `load_current_season_db()` now falls back to the last same-season cache snapshot when live refresh fails, instead of dropping straight to preseason-only data
+- `load_statcast_db()` now surfaces broken caches with missing player names instead of silently building an empty MLBAM reverse index
+- `build_statcast_cache.py` now recognises more Baseball Savant name column variants and refuses to overwrite an existing cache when fetches fail or rows contain no usable player names
+
 ### Planned
 - Additional Statcast metrics (whiff rate, chase rate, spin rate trends)
 - Multi-league support

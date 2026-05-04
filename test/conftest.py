@@ -58,41 +58,41 @@ _PITCHING_SCORING = {
 }
 
 _settings = types.ModuleType("fdb.settings")
-_settings.MY_TEAM_NAME              = "Test Team"
-_settings.N_TEAMS                   = 10
-_settings.BATTING_SCORING           = _BATTING_SCORING
-_settings.PITCHING_SCORING          = _PITCHING_SCORING
-_settings.SLOTS_PER_TEAM            = {
-    "C":1,"1B":1,"2B":1,"3B":1,"SS":1,"OF":3,"UTIL":1,
-    "SP":2,"RP":2,"P":3,"BE":5,"IL":2,
+_settings.MY_TEAM_NAME = "Test Team"
+_settings.N_TEAMS = 10
+_settings.BATTING_SCORING = _BATTING_SCORING
+_settings.PITCHING_SCORING = _PITCHING_SCORING
+_settings.SLOTS_PER_TEAM = {
+    "C": 1, "1B": 1, "2B": 1, "3B": 1, "SS": 1, "OF": 3, "UTIL": 1,
+    "SP": 2, "RP": 2, "P": 3, "BE": 5, "IL": 2,
 }
-_settings.SCRIPT_DIR                = str(REPO_ROOT)
-_settings.LEAGUE_ID                 = 0
-_settings.YEAR                      = 2026
-_settings.SWID                      = ""
-_settings.ESPN_S2                   = ""
-_settings.REPLACEMENT_BUFFER        = 1.0
-_settings.STASH_SCORE_THRESHOLD     = 5.0
+_settings.SCRIPT_DIR = str(REPO_ROOT)
+_settings.LEAGUE_ID = 0
+_settings.YEAR = 2026
+_settings.SWID = ""
+_settings.ESPN_S2 = ""
+_settings.REPLACEMENT_BUFFER = 1.0
+_settings.STASH_SCORE_THRESHOLD = 5.0
 _settings.SEASON_INTEL_FA_THRESHOLD = 10.0
-_settings.SEASON_TREND_MIN_GAMES    = 10
-_settings.SEASON_TREND_LOOKBACK     = 14
-_settings.MARKET                    = {}
-_settings.WEEKLY_STARTS             = {}
-_settings.SCALING                   = {}
-_settings.REFERENCE_DB_PATH        = ""
-_settings.REFERENCE_DB             = {}
-_settings.PROJECTION_DB_PATH       = ""
-_settings.PROJECTION_DB            = {}
-_settings.STATCAST_DB_PATH         = ""
-_settings.STATCAST_DB              = {}
-_settings.WEEKLY_IP_LIMIT          = 50
-_settings.PYBASEBALL_AVAILABLE     = False
-_settings.League                   = MagicMock()
-_settings.batting_stats            = MagicMock(return_value=None)
-_settings.pitching_stats           = MagicMock(return_value=None)
-_settings.batting_stats_bref       = MagicMock(return_value=None)
-_settings.pitching_stats_bref      = MagicMock(return_value=None)
-_settings.bwar_bat                 = MagicMock(return_value=None)
-_settings.bwar_pitch               = MagicMock(return_value=None)
+_settings.SEASON_TREND_MIN_GAMES = 10
+_settings.SEASON_TREND_LOOKBACK = 14
+_settings.MARKET = {}
+_settings.WEEKLY_STARTS = {}
+_settings.SCALING = {}
+_settings.REFERENCE_DB_PATH = ""
+_settings.REFERENCE_DB = {}
+_settings.PROJECTION_DB_PATH = ""
+_settings.PROJECTION_DB = {}
+_settings.STATCAST_DB_PATH = ""
+_settings.STATCAST_DB = {}
+_settings.WEEKLY_IP_LIMIT = 50
+_settings.PYBASEBALL_AVAILABLE = False
+_settings.League = MagicMock()
+_settings.batting_stats = MagicMock(return_value=None)
+_settings.pitching_stats = MagicMock(return_value=None)
+_settings.batting_stats_bref = MagicMock(return_value=None)
+_settings.pitching_stats_bref = MagicMock(return_value=None)
+_settings.bwar_bat = MagicMock(return_value=None)
+_settings.bwar_pitch = MagicMock(return_value=None)
 
 sys.modules["fdb.settings"] = _settings

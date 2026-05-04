@@ -69,9 +69,9 @@ class TestSimulateOnceTieHandling:
         schedule = {1: [("Team A", "Team B")]}
         rng = random.Random(0)
         result = _simulate_once(profiles, schedule, current_week=1, rng=rng)
-        total_wins   = result["Team A"]["wins"]   + result["Team B"]["wins"]
+        total_wins = result["Team A"]["wins"] + result["Team B"]["wins"]
         total_losses = result["Team A"]["losses"] + result["Team B"]["losses"]
-        assert total_wins   == 1.0
+        assert total_wins == 1.0
         assert total_losses == 1.0  # one win + one loss for a decisive result
 
     def test_tie_gives_half_win_and_zero_losses(self):
@@ -91,8 +91,8 @@ class TestSimulateOnceTieHandling:
 
         sim_mod._draw_weekly_score = original  # restore
 
-        assert result["Team A"]["wins"]   == 0.5, "Tie should give 0.5 wins"
-        assert result["Team B"]["wins"]   == 0.5, "Tie should give 0.5 wins"
+        assert result["Team A"]["wins"] == 0.5, "Tie should give 0.5 wins"
+        assert result["Team B"]["wins"] == 0.5, "Tie should give 0.5 wins"
         assert result["Team A"]["losses"] == 0.0, "Tie must NOT add losses"
         assert result["Team B"]["losses"] == 0.0, "Tie must NOT add losses"
 
@@ -111,8 +111,8 @@ class TestSimulateOnceTieHandling:
         schedule = {1: [("Team A", "Team B")]}  # week 1 is in the past
         rng = random.Random(0)
         result = _simulate_once(profiles, schedule, current_week=2, rng=rng)
-        assert result["Team A"]["wins"]   == 0.0
-        assert result["Team B"]["wins"]   == 0.0
+        assert result["Team A"]["wins"] == 0.0
+        assert result["Team B"]["wins"] == 0.0
         assert result["Team A"]["losses"] == 0.0
 
 
@@ -124,19 +124,19 @@ class TestRankTeams:
     def test_higher_wins_ranks_first(self):
         results = {
             "Alpha": {"wins": 10, "pts": 500.0},
-            "Beta":  {"wins":  5, "pts": 600.0},
+            "Beta": {"wins": 5, "pts": 600.0},
         }
         ranks = _rank_teams(results)
         assert ranks["Alpha"] == 1
-        assert ranks["Beta"]  == 2
+        assert ranks["Beta"] == 2
 
     def test_pts_breaks_wins_tie(self):
         results = {
             "Alpha": {"wins": 8, "pts": 400.0},
-            "Beta":  {"wins": 8, "pts": 500.0},
+            "Beta": {"wins": 8, "pts": 500.0},
         }
         ranks = _rank_teams(results)
-        assert ranks["Beta"]  == 1
+        assert ranks["Beta"] == 1
         assert ranks["Alpha"] == 2
 
     def test_all_teams_get_a_rank(self):

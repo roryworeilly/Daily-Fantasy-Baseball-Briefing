@@ -8,7 +8,6 @@ fdb.settings is mocked in conftest.py.
 import pytest
 import sys
 import types
-from pathlib import Path
 from unittest.mock import MagicMock
 
 # conftest.py has already set up fdb.settings stub and path insertions.
@@ -26,9 +25,8 @@ from fdb.model import (
     _pitcher_pts_from_stats,
     normalize_name,
     as_float,
-    get_metric,
 )
-from fdb.settings import BATTING_SCORING, PITCHING_SCORING
+from fdb.settings import PITCHING_SCORING
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -45,7 +43,7 @@ class TestHitterPtsFromStats:
         assert score > 0
 
     def test_strikeouts_reduce_score(self):
-        base  = _hitter_pts_from_stats({"R": 5, "HR": 2, "RBI": 5})
+        base = _hitter_pts_from_stats({"R": 5, "HR": 2, "RBI": 5})
         with_k = _hitter_pts_from_stats({"R": 5, "HR": 2, "RBI": 5, "SO": 10})
         assert with_k < base
 

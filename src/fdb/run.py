@@ -27,10 +27,10 @@ from fdb.model import (
 from fdb.settings import SCRIPT_DIR
 
 # ── Cache TTLs (days) — must match the tool scripts ──────────────────────────
-_STATCAST_CACHE   = os.path.join(SCRIPT_DIR, "statcast_cache.json")
+_STATCAST_CACHE = os.path.join(SCRIPT_DIR, "statcast_cache.json")
 _PROJECTION_CACHE = os.path.join(SCRIPT_DIR, "projection_cache.json")
-_REFERENCE_CACHE  = os.path.join(SCRIPT_DIR, "player_reference_cache.json")
-_CACHE_TTL_DAYS   = 7
+_REFERENCE_CACHE = os.path.join(SCRIPT_DIR, "player_reference_cache.json")
+_CACHE_TTL_DAYS = 7
 
 
 def _cache_age_days(path: str) -> float:

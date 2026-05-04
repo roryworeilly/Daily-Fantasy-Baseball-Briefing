@@ -6,9 +6,9 @@ relevant to the bugs fixed during the 2026-04-29 code review.
 """
 import math
 import os
-import time
 import tempfile
-import pytest
+import time
+
 from fdb.utils import normalize_name, compact, get_metric, cache_is_fresh
 
 

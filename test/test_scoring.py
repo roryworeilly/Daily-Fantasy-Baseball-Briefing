@@ -6,12 +6,16 @@ including a regression test for the holds/blown-saves fallback bug that
 was fixed: stats.get("HLD", stats.get("BS", 0)) incorrectly credited
 blown saves as holds.
 """
-import pytest
+import importlib
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
-from model_comparison import calc_fdb_bat, calc_fdb_pit
+model_comparison = importlib.import_module("model_comparison")
+calc_fdb_bat = model_comparison.calc_fdb_bat
+calc_fdb_pit = model_comparison.calc_fdb_pit
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -99,10 +103,10 @@ class TestCalcFdbPit:
         fallback for holds.  A pitcher with 5 BS and 0 HLD was credited 5 holds.
         FIX: stats.get("HLD", 0) — BS should never count as holds.
         """
-        stats_bs_only = {"IP": 10.0, "BS": 5}     # 5 blown saves, 0 holds
-        stats_hld     = {"IP": 10.0, "HLD": 5}    # 5 holds, 0 blown saves
+        stats_bs_only = {"IP": 10.0, "BS": 5}  # 5 blown saves, 0 holds
+        stats_hld = {"IP": 10.0, "HLD": 5}  # 5 holds, 0 blown saves
 
-        score_bs  = calc_fdb_pit(stats_bs_only)
+        score_bs = calc_fdb_pit(stats_bs_only)
         score_hld = calc_fdb_pit(stats_hld)
 
         # Blown saves should NOT be scored as holds
@@ -122,7 +126,7 @@ class TestCalcFdbPit:
 
     def test_era_does_not_directly_appear(self):
         """ERA is a ratio stat — calc_fdb_pit uses counting stats only."""
-        stats_with_era    = {"IP": 9.0, "ERA": 1.50}
+        stats_with_era = {"IP": 9.0, "ERA": 1.50}
         stats_without_era = {"IP": 9.0}
         # ERA should have no effect on the raw points formula
         assert calc_fdb_pit(stats_with_era) == calc_fdb_pit(stats_without_era)

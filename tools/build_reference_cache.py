@@ -23,19 +23,26 @@ Token-optimization strategy:
   • Only columns actually used by model.py are stored (no full-DataFrame dump)
 """
 
-import os, sys, json, re, time
+import importlib
+import json
+import os
+import sys
+import time
 from datetime import datetime
 
 # ── Cache TTL ─────────────────────────────────────────────────────────────────
 CACHE_TTL_DAYS = 7  # rebuild if cache is older than this
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-from fdb.utils import normalize_name, compact as _compact, get_metric, cache_is_fresh as _cache_is_fresh
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+_utils = importlib.import_module("fdb.utils")
+normalize_name = _utils.normalize_name
+_compact = _utils.compact
+get_metric = _utils.get_metric
+_cache_is_fresh = _utils.cache_is_fresh
 
 SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE_PATH = os.path.join(SCRIPT_DIR, "player_reference_cache.json")
-import datetime as _dt
-YEAR   = int(os.environ.get("YEAR", str(_dt.datetime.now().year)))
+YEAR = int(os.environ.get("YEAR", str(datetime.now().year)))
 SEASON = YEAR - 1
 
 
@@ -52,6 +59,7 @@ except ImportError:
 
 # ── FanGraphs loader ──────────────────────────────────────────────────────────
 
+
 def load_from_fangraphs(season):
     print(f"  Fetching {season} batting stats from FanGraphs...")
     h_df = batting_stats(season, season, qual=0)
@@ -66,9 +74,9 @@ def load_from_fangraphs(season):
         name = normalize_name(row.get("Name", ""))
         if not name:
             continue
-        h  = get_metric(row, "H")
-        d  = get_metric(row, "2B")
-        t  = get_metric(row, "3B")
+        h = get_metric(row, "H")
+        d = get_metric(row, "2B")
+        t = get_metric(row, "3B")
         hr = get_metric(row, "HR")
         hitters[name] = {
             "display_name": row.get("Name", ""),
@@ -109,9 +117,9 @@ def load_from_fangraphs(season):
         name = normalize_name(row.get("Name", ""))
         if not name:
             continue
-        era  = get_metric(row, "ERA")
+        era = get_metric(row, "ERA")
         whip = get_metric(row, "WHIP")
-        fip  = get_metric(row, "FIP")
+        fip = get_metric(row, "FIP")
         xfip = get_metric(row, "xFIP")
         pitchers[name] = {
             "display_name": row.get("Name", ""),
@@ -129,11 +137,11 @@ def load_from_fangraphs(season):
             "BS":   _compact(get_metric(row, "BS"), 1),
             "QS":   _compact(get_metric(row, "QS"), 1),
             "GS":   _compact(get_metric(row, "GS"), 1),
-            "ERA":  _compact(era  if era  > 0 else 99.0),
+            "ERA": _compact(era if era > 0 else 99.0),
             "WHIP": _compact(whip if whip > 0 else 9.9),
             "WAR":  _compact(get_metric(row, "WAR")),
             # ── Phase 1: FanGraphs advanced ERA estimators ────────────────────
-            "FIP":   _compact(fip  if fip  > 0 else 0.0),   # fielding-independent ERA
+            "FIP": _compact(fip if fip > 0 else 0.0),  # fielding-independent ERA
             "xFIP":  _compact(xfip if xfip > 0 else 0.0),  # xFIP (normalized HR/FB)
             "SIERA": _compact(get_metric(row, "SIERA")),    # best ERA predictor
             # Swing / stuff
@@ -150,16 +158,18 @@ def load_from_fangraphs(season):
             # Regression signals
             "HRFBp": _compact(get_metric(row, "HR/FB")),    # HR per fly ball (mean-reverts)
             "LOBp":  _compact(get_metric(row, "LOB%")),     # strand rate (mean-reverts)
-            "BABIPp":_compact(get_metric(row, "BABIP")),    # pitcher BABIP allowed
+            "BABIPp": _compact(get_metric(row, "BABIP")),  # pitcher BABIP allowed
         }
 
     return hitters, pitchers
 
+
 # ── Baseball Reference loader (fallback) ──────────────────────────────────────
+
 
 def load_from_bref(season):
     print(f"  Fetching {season} batting stats from Baseball Reference...")
-    hitters_df  = batting_stats_bref(season)
+    hitters_df = batting_stats_bref(season)
     print(f"    → {len(hitters_df)} rows")
 
     print(f"  Fetching {season} pitching stats from Baseball Reference...")
@@ -190,18 +200,18 @@ def load_from_bref(season):
             "BABIP": 0.0, "LDp": 0.0, "GBp": 0.0, "FBp": 0.0,
             "Hardp": 0.0, "Brlp": 0.0, "Spd": 0.0,
         })
-        e["PA"]  += get_metric(row, "PA")
-        e["H"]   += get_metric(row, "H")
-        e["2B"]  += get_metric(row, "2B")
-        e["3B"]  += get_metric(row, "3B")
-        e["HR"]  += get_metric(row, "HR")
-        e["R"]   += get_metric(row, "R")
+        e["PA"] += get_metric(row, "PA")
+        e["H"] += get_metric(row, "H")
+        e["2B"] += get_metric(row, "2B")
+        e["3B"] += get_metric(row, "3B")
+        e["HR"] += get_metric(row, "HR")
+        e["R"] += get_metric(row, "R")
         e["RBI"] += get_metric(row, "RBI")
-        e["SB"]  += get_metric(row, "SB")
-        e["BB"]  += get_metric(row, "BB")
-        e["SO"]  += get_metric(row, "SO", "K")
-        e["TB"]  += get_metric(row, "TB")
-        e["OPS"]  = max(e["OPS"], get_metric(row, "OPS"))
+        e["SB"] += get_metric(row, "SB")
+        e["BB"] += get_metric(row, "BB")
+        e["SO"] += get_metric(row, "SO", "K")
+        e["TB"] += get_metric(row, "TB")
+        e["OPS"] = max(e["OPS"], get_metric(row, "OPS"))
 
     for row in h_war_df.to_dict(orient="records"):
         name = normalize_name(row.get("name_common", ""))
@@ -227,22 +237,24 @@ def load_from_bref(season):
             "GBp": 0.0, "FBp": 0.0, "LDp": 0.0,
             "HRFBp": 0.0, "LOBp": 0.0, "BABIPp": 0.0,
         })
-        e["IP"]  += get_metric(row, "IP")
-        e["H"]   += get_metric(row, "H")
-        e["ER"]  += get_metric(row, "ER")
-        e["HR"]  += get_metric(row, "HR")
-        e["BB"]  += get_metric(row, "BB")
-        e["SO"]  += get_metric(row, "SO", "K")
-        e["W"]   += get_metric(row, "W")
-        e["L"]   += get_metric(row, "L")
-        e["SV"]  += get_metric(row, "SV")
-        e["HD"]  += get_metric(row, "HLD", "HD")
-        e["QS"]  += get_metric(row, "QS")
-        e["GS"]  += get_metric(row, "GS")
-        era  = get_metric(row, "ERA")
+        e["IP"] += get_metric(row, "IP")
+        e["H"] += get_metric(row, "H")
+        e["ER"] += get_metric(row, "ER")
+        e["HR"] += get_metric(row, "HR")
+        e["BB"] += get_metric(row, "BB")
+        e["SO"] += get_metric(row, "SO", "K")
+        e["W"] += get_metric(row, "W")
+        e["L"] += get_metric(row, "L")
+        e["SV"] += get_metric(row, "SV")
+        e["HD"] += get_metric(row, "HLD", "HD")
+        e["QS"] += get_metric(row, "QS")
+        e["GS"] += get_metric(row, "GS")
+        era = get_metric(row, "ERA")
         whip = get_metric(row, "WHIP")
-        if era  > 0: e["ERA"]  = min(e["ERA"],  era)
-        if whip > 0: e["WHIP"] = min(e["WHIP"], whip)
+        if era > 0:
+            e["ERA"] = min(e["ERA"], era)
+        if whip > 0:
+            e["WHIP"] = min(e["WHIP"], whip)
 
     for row in p_war_df.to_dict(orient="records"):
         name = normalize_name(row.get("name_common", ""))
@@ -251,10 +263,12 @@ def load_from_bref(season):
 
     return hitters, pitchers
 
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+
 def main():
-    force   = "--force" in sys.argv
+    force = "--force" in sys.argv
     season_override = next(
         (int(sys.argv[i + 1]) for i, a in enumerate(sys.argv) if a == "--season" and i + 1 < len(sys.argv)),
         None,
@@ -268,11 +282,11 @@ def main():
     if not force and _cache_is_fresh(CACHE_PATH, CACHE_TTL_DAYS):
         age_hours = (time.time() - os.path.getmtime(CACHE_PATH)) / 3600
         print(f"  Cache is fresh ({age_hours:.1f}h old, TTL={CACHE_TTL_DAYS}d). Skipping rebuild.")
-        print(f"  Use --force to rebuild anyway.\n")
+        print("  Use --force to rebuild anyway.\n")
         return
 
     hitters = pitchers = None
-    source  = None
+    source = None
 
     # Try FanGraphs first
     try:
@@ -289,12 +303,12 @@ def main():
             sys.exit(1)
 
     data = {
-        "season":    season,
-        "built_at":  datetime.utcnow().isoformat() + "Z",
-        "hitters":   hitters,
-        "pitchers":  pitchers,
-        "loaded":    True,
-        "source":    source,
+        "season": season,
+        "built_at": datetime.utcnow().isoformat() + "Z",
+        "hitters": hitters,
+        "pitchers": pitchers,
+        "loaded": True,
+        "source": source,
     }
 
     with open(CACHE_PATH, "w") as f:
@@ -307,6 +321,7 @@ def main():
     print(f"  Saved to: {CACHE_PATH}")
     print(f"  Next rebuild due: in {CACHE_TTL_DAYS} days (or use --force)\n")
     print("Run fdbRV.py — it will load from cache instantly.\n")
+
 
 if __name__ == "__main__":
     main()

@@ -2,10 +2,7 @@
 Machine-generated from fdbRV.py — see .build/generate_fdb_package.py.
 """
 import os
-import sys
-import json
-import html
-from datetime import datetime
+from datetime import timedelta
 
 # ── Cache redirect ────────────────────────────────────────────────────────────
 _PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -15,7 +12,7 @@ os.environ["HOME"] = SCRIPT_DIR
 
 try:
     import requests_cache
-    from datetime import timedelta
+
     requests_cache.install_cache(
         os.path.join(SCRIPT_DIR, "espn_cache"),
         backend="sqlite",
@@ -31,13 +28,17 @@ try:
     # before the TTL was established — these would otherwise serve stale roster
     # data indefinitely (e.g. after a waiver pickup or FA drop).
     try:
-        import sqlite3, time as _time
+        import sqlite3
+        import time as _time
+
         _cache_db = os.path.join(SCRIPT_DIR, "espn_cache.sqlite")
         if os.path.exists(_cache_db):
             _conn = sqlite3.connect(_cache_db)
             _conn.execute("DELETE FROM responses WHERE expires IS NULL")
-            _conn.execute("DELETE FROM responses WHERE expires IS NOT NULL AND expires < ?",
-                          (_time.time(),))
+            _conn.execute(
+                "DELETE FROM responses WHERE expires IS NOT NULL AND expires < ?",
+                (_time.time(),),
+            )
             _conn.commit()
             _conn.close()
     except Exception:
@@ -45,22 +46,41 @@ try:
 except ImportError:
     pass
 
-from espn_api.baseball import League
+from espn_api.baseball import League  # noqa: E402
 
 try:
     from pybaseball import (
-        batting_stats, pitching_stats,           # FanGraphs (primary — JSON API)
-        batting_stats_bref, pitching_stats_bref, # Baseball Reference (fallback)
+        batting_stats,
+        pitching_stats,  # FanGraphs (primary — JSON API)
+        batting_stats_bref,
+        pitching_stats_bref,  # Baseball Reference (fallback)
         bwar_bat, bwar_pitch,
     )
     PYBASEBALL_AVAILABLE = True
 except ImportError:
+    batting_stats = None
+    pitching_stats = None
+    batting_stats_bref = None
+    pitching_stats_bref = None
+    bwar_bat = None
+    bwar_pitch = None
     PYBASEBALL_AVAILABLE = False
+
+_EXPORTED_IMPORTS = (
+    League,
+    batting_stats,
+    pitching_stats,
+    batting_stats_bref,
+    pitching_stats_bref,
+    bwar_bat,
+    bwar_pitch,
+)
 
 # ── Credentials (loaded from .env — never hard-code here) ─────────────────────
 # To update: double-click "Update ESPN Credentials.command" in the FB folder,
 # or open .env in any text editor and paste fresh SWID / ESPN_S2 values.
 # Grab fresh values from browser DevTools → Application → Cookies → fantasy.espn.com.
+
 
 def _load_env_file(path):
     """Minimal .env parser — no external dependencies required."""
@@ -77,14 +97,15 @@ def _load_env_file(path):
             if _key and _key not in os.environ:  # don't override shell env vars
                 os.environ[_key] = _val
 
+
 _load_env_file(os.path.join(SCRIPT_DIR, ".env"))
 
-LEAGUE_ID    = int(os.environ.get("LEAGUE_ID",    "0"))
-YEAR         = int(os.environ.get("YEAR",          "2026"))
-SWID         = os.environ.get("ESPN_SWID",         "")
-ESPN_S2      = os.environ.get("ESPN_S2",           "")
-MY_TEAM_NAME = os.environ.get("MY_TEAM_NAME",      "")
-N_TEAMS      = int(os.environ.get("N_TEAMS",       "14"))
+LEAGUE_ID = int(os.environ.get("LEAGUE_ID", "0"))
+YEAR = int(os.environ.get("YEAR", "2026"))
+SWID = os.environ.get("ESPN_SWID", "")
+ESPN_S2 = os.environ.get("ESPN_S2", "")
+MY_TEAM_NAME = os.environ.get("MY_TEAM_NAME", "")
+N_TEAMS = int(os.environ.get("N_TEAMS", "14"))
 
 # ── Scoring rules ─────────────────────────────────────────────────────────────
 BATTING_SCORING = {
@@ -117,10 +138,10 @@ REPLACEMENT_BUFFER = 3
 WEEKLY_IP_LIMIT = int(os.environ.get("WEEKLY_IP_LIMIT", "50"))
 
 # ── Season Intelligence settings ─────────────────────────────────────────────
-STASH_SCORE_THRESHOLD     = 50.0   # min healthy base score to flag as stash target
-SEASON_INTEL_FA_THRESHOLD = 60.0   # min healthy base score for long-season FA watch
-SEASON_TREND_MIN_GAMES    = 5      # minimum games in lookback window to compute trend
-SEASON_TREND_LOOKBACK     = 45     # days to look back for current-season trend
+STASH_SCORE_THRESHOLD = 50.0  # min healthy base score to flag as stash target
+SEASON_INTEL_FA_THRESHOLD = 60.0  # min healthy base score for long-season FA watch
+SEASON_TREND_MIN_GAMES = 5  # minimum games in lookback window to compute trend
+SEASON_TREND_LOOKBACK = 45  # days to look back for current-season trend
 
 # ── Market context (populated by build_market_context) ───────────────────────
 MARKET = {
@@ -190,4 +211,4 @@ STATCAST_DB = {
 
 # Thresholds for regression / breakout signal classification
 STATCAST_XWOBA_THRESHOLD = 0.030  # |xwOBA - wOBA| gap: meaningful signal
-STATCAST_XERA_THRESHOLD  = 1.00   # |xERA - ERA|  gap: meaningful signal
+STATCAST_XERA_THRESHOLD = 1.00  # |xERA - ERA|  gap: meaningful signal

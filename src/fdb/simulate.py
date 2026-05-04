@@ -24,15 +24,13 @@ Design notes
 """
 from __future__ import annotations
 
-import math
 import random
 import traceback
 from collections import defaultdict
-from datetime import datetime
 
 from fdb.settings import (
-    MY_TEAM_NAME, N_TEAMS,
-    BATTING_SCORING, PITCHING_SCORING,
+    MY_TEAM_NAME,
+    PITCHING_SCORING,
 )
 from fdb.model import (
     get_projected_pts,
@@ -45,16 +43,15 @@ from fdb.model import (
     get_player_status,
     as_float,
     safe_get,
-    fmt,
     best_lineup_pts,
 )
 
 # ── Simulation constants ──────────────────────────────────────────────────────
-TOTAL_WEEKS       = 26          # standard ESPN fantasy baseball season length
-N_SIMS            = 500         # Monte Carlo iterations
-WEEKLY_CV         = 0.18        # coefficient of variation for weekly score
-PLAYOFF_SPOTS     = 6           # top N teams make playoffs (adjust if needed)
-MIN_WEEKLY_SCORE  = 0.0         # floor for weekly score draws
+TOTAL_WEEKS = 26  # standard ESPN fantasy baseball season length
+N_SIMS = 500  # Monte Carlo iterations
+WEEKLY_CV = 0.18  # coefficient of variation for weekly score
+PLAYOFF_SPOTS = 6  # top N teams make playoffs (adjust if needed)
+MIN_WEEKLY_SCORE = 0.0  # floor for weekly score draws
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -93,9 +90,9 @@ def _get_team_weekly_mu(team) -> float:
     # Fallback: simple sum across active roster
     total = 0.0
     for p in team.roster:
-        slot   = get_lineup_slot(p)
+        slot = get_lineup_slot(p)
         status = get_player_status(p)
-        on_il  = slot in ("IL", "IR") or status not in ("ACTIVE", "NORMAL", "")
+        on_il = slot in ("IL", "IR") or status not in ("ACTIVE", "NORMAL", "")
         if not on_il:
             total += get_weekly_projected_pts(p)
     return max(0.0, total)
@@ -121,22 +118,21 @@ def _build_team_profiles(league) -> dict:
     """
     profiles = {}
     for team in league.teams:
-        mu       = _get_team_weekly_mu(team)
-        wins     = int(as_float(safe_get(team, "wins",   default=0)))
-        losses   = int(as_float(safe_get(team, "losses", default=0)))
-        tid      = int(as_float(safe_get(team, "team_id", default=0)))
+        mu = _get_team_weekly_mu(team)
+        wins = int(as_float(safe_get(team, "wins", default=0)))
+        losses = int(as_float(safe_get(team, "losses", default=0)))
+        tid = int(as_float(safe_get(team, "team_id", default=0)))
 
-        sp_pts   = 0.0
-        rp_pts   = 0.0
-        hit_pts  = 0.0
+        sp_pts = 0.0
+        rp_pts = 0.0
+        hit_pts = 0.0
         n_closers = 0
-        n_holds   = 0
+        n_holds = 0
 
         for p in team.roster:
-            pts  = get_projected_pts(p)
+            pts = get_projected_pts(p)
             slot = get_lineup_slot(p)
-            on_il = slot in ("IL", "IR") or \
-                    get_player_status(p) not in ("ACTIVE", "NORMAL", "")
+            on_il = slot in ("IL", "IR") or get_player_status(p) not in ("ACTIVE", "NORMAL", "")
             if on_il:
                 continue
 
@@ -160,17 +156,17 @@ def _build_team_profiles(league) -> dict:
                 hit_pts += pts
 
         profiles[team.team_name] = {
-            "mu":         mu,
-            "wins":       wins,
-            "losses":     losses,
-            "tid":        tid,
+            "mu": mu,
+            "wins": wins,
+            "losses": losses,
+            "tid": tid,
             "season_pts": sp_pts + rp_pts + hit_pts,
-            "rp_pts":     rp_pts,
-            "sp_pts":     sp_pts,
-            "hit_pts":    hit_pts,
-            "n_closers":  n_closers,
-            "n_holds":    n_holds,
-            "is_mine":    _my_team_name_matches(team.team_name),
+            "rp_pts": rp_pts,
+            "sp_pts": sp_pts,
+            "hit_pts": hit_pts,
+            "n_closers": n_closers,
+            "n_holds": n_holds,
+            "is_mine": _my_team_name_matches(team.team_name),
         }
     return profiles
 
@@ -220,16 +216,16 @@ def _build_round_robin_schedule(
     Uses the circle-rotation algorithm to produce a balanced schedule.
     If N is odd, one team gets a bye each round.
     """
-    names  = list(team_names)
-    n      = len(names)
+    names = list(team_names)
+    n = len(names)
     sched: dict[int, list[tuple[str, str]]] = {}
 
     # Each round produces n//2 matchups
     rounds_needed = max(n - 1, 1)
     for week in range(1, total_weeks + 1):
-        rnd   = (week - 1) % rounds_needed
+        rnd = (week - 1) % rounds_needed
         fixed = names[0]
-        rot   = names[1:]
+        rot = names[1:]
         rotated = rot[rnd:] + rot[:rnd]
         participants = [fixed] + rotated
 
@@ -266,10 +262,11 @@ def _get_full_schedule(league) -> tuple[dict, int]:
         if w not in schedule:
             schedule[w] = rr.get(w, [])
 
-    fetched_real = sum(1 for w, pairs in schedule.items()
-                       if pairs and w <= TOTAL_WEEKS)
-    print(f"  Schedule: {fetched_real} weeks with real ESPN pairings "
-          f"(current week {current_week})")
+    fetched_real = sum(1 for w, pairs in schedule.items() if pairs and w <= TOTAL_WEEKS)
+    print(
+        f"  Schedule: {fetched_real} weeks with real ESPN pairings "
+        f"(current week {current_week})"
+    )
     return schedule, current_week
 
 
@@ -278,10 +275,10 @@ def _get_full_schedule(league) -> tuple[dict, int]:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _simulate_once(
-    profiles:      dict,
-    schedule:      dict[int, list[tuple[str, str]]],
-    current_week:  int,
-    rng:           random.Random,
+    profiles: dict,
+    schedule: dict[int, list[tuple[str, str]]],
+    current_week: int,
+    rng: random.Random,
 ) -> dict[str, dict]:
     """
     Simulate one full season from the current week onward.
@@ -305,15 +302,15 @@ def _simulate_once(
             results[ta]["pts"] += score_a
             results[tb]["pts"] += score_b
             if score_a > score_b:
-                results[ta]["wins"]   += 1
+                results[ta]["wins"] += 1
                 results[tb]["losses"] += 1
             elif score_b > score_a:
-                results[tb]["wins"]   += 1
+                results[tb]["wins"] += 1
                 results[ta]["losses"] += 1
             else:
                 # Exact ties are extremely rare; ESPN awards 0.5 wins, 0 losses
-                results[ta]["wins"]   += 0.5
-                results[tb]["wins"]   += 0.5
+                results[ta]["wins"] += 0.5
+                results[tb]["wins"] += 0.5
 
     return results
 
@@ -329,10 +326,10 @@ def _rank_teams(results: dict[str, dict]) -> dict[str, int]:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _run_monte_carlo(
-    profiles:     dict,
-    schedule:     dict,
+    profiles: dict,
+    schedule: dict,
     current_week: int,
-    n_sims:       int = N_SIMS,
+    n_sims: int = N_SIMS,
 ) -> dict:
     """
     Run n_sims full-season simulations.
@@ -352,11 +349,11 @@ def _run_monte_carlo(
     rng = random.Random(42)  # deterministic seed for reproducibility
 
     # Accumulators
-    playoff_count  = defaultdict(int)
-    champ_count    = defaultdict(int)
-    total_wins     = defaultdict(float)
-    total_rank     = defaultdict(float)
-    wins_all       = defaultdict(list)
+    playoff_count = defaultdict(int)
+    champ_count = defaultdict(int)
+    total_wins = defaultdict(float)
+    total_rank = defaultdict(float)
+    wins_all = defaultdict(list)
 
     for _ in range(n_sims):
         sim = _simulate_once(profiles, schedule, current_week, rng)
@@ -380,12 +377,12 @@ def _run_monte_carlo(
         hi = int(ws[int(len(ws) * 0.90)])
 
         aggregated[name] = {
-            "playoff_pct":    round(100.0 * playoff_count[name] / n_sims, 1),
-            "champion_pct":   round(100.0 * champ_count[name]  / n_sims, 1),
-            "avg_wins":       round(total_wins[name] / n_sims, 1),
-            "avg_rank":       round(total_rank[name] / n_sims, 1),
-            "proj_wins_low":  lo,
-            "proj_wins_mid":  md,
+            "playoff_pct": round(100.0 * playoff_count[name] / n_sims, 1),
+            "champion_pct": round(100.0 * champ_count[name] / n_sims, 1),
+            "avg_wins": round(total_wins[name] / n_sims, 1),
+            "avg_rank": round(total_rank[name] / n_sims, 1),
+            "proj_wins_low": lo,
+            "proj_wins_mid": md,
             "proj_wins_high": hi,
         }
 
@@ -398,10 +395,10 @@ def _run_monte_carlo(
 
 def _player_win_contribution(
     my_team,
-    profiles:     dict,
-    schedule:     dict,
+    profiles: dict,
+    schedule: dict,
     current_week: int,
-    n_sims:       int = 100,
+    n_sims: int = 100,
 ) -> list[dict]:
     """
     Estimate each rostered player's contribution to my team's win total.
@@ -423,7 +420,7 @@ def _player_win_contribution(
         return []
 
     base_mu = profiles[my_name]["mu"]
-    rng     = random.Random(7)
+    rng = random.Random(7)
 
     # Baseline: my team's average wins with full roster
     def _avg_wins_for_mu(mu: float) -> float:
@@ -432,8 +429,7 @@ def _player_win_contribution(
         prof_copy[my_name]["mu"] = max(0.0, mu)
         total = 0.0
         for _ in range(n_sims):
-            sim   = _simulate_once(prof_copy, schedule, current_week, rng)
-            ranks = _rank_teams(sim)
+            sim = _simulate_once(prof_copy, schedule, current_week, rng)
             total += sim[my_name]["wins"]
         return total / n_sims
 
@@ -441,9 +437,9 @@ def _player_win_contribution(
 
     results = []
     for p in my_team.roster:
-        slot   = get_lineup_slot(p)
+        slot = get_lineup_slot(p)
         status = get_player_status(p)
-        on_il  = slot in ("IL", "IR") or status not in ("ACTIVE", "NORMAL", "")
+        on_il = slot in ("IL", "IR") or status not in ("ACTIVE", "NORMAL", "")
 
         weekly = get_weekly_projected_pts(p)
         if weekly <= 0:
@@ -452,26 +448,26 @@ def _player_win_contribution(
             weekly_show = round(weekly, 1)
 
         # Win contribution = how many wins we lose without this player
-        mu_without  = max(0.0, base_mu - weekly)
+        mu_without = max(0.0, base_mu - weekly)
         wins_without = _avg_wins_for_mu(mu_without)
         win_contrib = round(baseline_wins - wins_without, 2)
 
         slots = get_player_slots(p)
-        pos   = ", ".join(slots[:2]) if slots else "?"
+        pos = ", ".join(slots[:2]) if slots else "?"
         pitcher = is_pitcher(p)
 
         results.append({
-            "player":          p.name,
-            "pos":             pos,
-            "is_pitcher":      pitcher,
-            "is_reliever":     is_reliever_role(p),
-            "is_starter":      is_starter_role(p),
-            "weekly_pts":      weekly_show,
-            "season_proj":     round(get_projected_pts(p), 0),
+            "player": p.name,
+            "pos": pos,
+            "is_pitcher": pitcher,
+            "is_reliever": is_reliever_role(p),
+            "is_starter": is_starter_role(p),
+            "weekly_pts": weekly_show,
+            "season_proj": round(get_projected_pts(p), 0),
             "win_contribution": win_contrib,
-            "pct_of_team_mu":  round(100 * weekly / base_mu, 1) if base_mu > 0 else 0.0,
-            "on_il":           on_il,
-            "status":          status,
+            "pct_of_team_mu": round(100 * weekly / base_mu, 1) if base_mu > 0 else 0.0,
+            "on_il": on_il,
+            "status": status,
         })
 
     results.sort(key=lambda r: -r["win_contribution"])
@@ -496,21 +492,24 @@ def _rp_value_analysis(league, profiles: dict) -> dict:
     breakdowns = []
     for name, prof in profiles.items():
         total_p = prof["sp_pts"] + prof["rp_pts"]
-        rp_pct  = round(100 * prof["rp_pts"] / total_p, 1) if total_p > 0 else 0.0
-        sp_pct  = round(100 * prof["sp_pts"] / total_p, 1) if total_p > 0 else 0.0
-        hit_pct = round(100 * prof["hit_pts"] / prof["season_pts"], 1) \
-                  if prof["season_pts"] > 0 else 0.0
+        rp_pct = round(100 * prof["rp_pts"] / total_p, 1) if total_p > 0 else 0.0
+        sp_pct = round(100 * prof["sp_pts"] / total_p, 1) if total_p > 0 else 0.0
+        hit_pct = (
+            round(100 * prof["hit_pts"] / prof["season_pts"], 1)
+            if prof["season_pts"] > 0
+            else 0.0
+        )
         breakdowns.append({
-            "team":      name,
-            "rp_pts":    round(prof["rp_pts"],  0),
-            "sp_pts":    round(prof["sp_pts"],  0),
-            "hit_pts":   round(prof["hit_pts"], 0),
-            "rp_pct":    rp_pct,
-            "sp_pct":    sp_pct,
-            "hit_pct":   hit_pct,
+            "team": name,
+            "rp_pts": round(prof["rp_pts"], 0),
+            "sp_pts": round(prof["sp_pts"], 0),
+            "hit_pts": round(prof["hit_pts"], 0),
+            "rp_pct": rp_pct,
+            "sp_pct": sp_pct,
+            "hit_pct": hit_pct,
             "n_closers": prof["n_closers"],
-            "n_holds":   prof["n_holds"],
-            "is_mine":   prof["is_mine"],
+            "n_holds": prof["n_holds"],
+            "is_mine": prof["is_mine"],
         })
 
     breakdowns.sort(key=lambda d: -d["rp_pts"])
@@ -529,21 +528,21 @@ def _rp_value_analysis(league, profiles: dict) -> dict:
     save_pts_per_save = PITCHING_SCORING.get("SV", 0)
     insight = (
         f"In this league each Hold = {hold_pts_per_hold} pts "
-        f"(HD+{PITCHING_SCORING.get('HD',0)} + SVHD+{PITCHING_SCORING.get('SVHD',0)}), "
+        f"(HD+{PITCHING_SCORING.get('HD', 0)} + SVHD+{PITCHING_SCORING.get('SVHD', 0)}), "
         f"same as a Save = {save_pts_per_save} pts. "
-        f"A 30-hold setup man projects ≈{30*hold_pts_per_hold} pts — "
-        f"nearly identical to a 35-save elite closer ({35*save_pts_per_save} pts). "
+        f"A 30-hold setup man projects ≈{30 * hold_pts_per_hold} pts — "
+        f"nearly identical to a 35-save elite closer ({35 * save_pts_per_save} pts). "
         f"Teams with 2+ high-hold RPs have a structural RP edge over "
         f"closer-only bullpens."
     )
 
     return {
-        "league_avg_rp_pct":  league_avg_rp_pct,
-        "league_avg_sp_pct":  league_avg_sp_pct,
-        "team_breakdowns":    breakdowns,
-        "my_team_breakdown":  my_breakdown,
-        "hold_pts_per_hold":  hold_pts_per_hold,
-        "save_pts_per_save":  save_pts_per_save,
+        "league_avg_rp_pct": league_avg_rp_pct,
+        "league_avg_sp_pct": league_avg_sp_pct,
+        "team_breakdowns": breakdowns,
+        "my_team_breakdown": my_breakdown,
+        "hold_pts_per_hold": hold_pts_per_hold,
+        "save_pts_per_save": save_pts_per_save,
         "hold_value_insight": insight,
     }
 
@@ -553,8 +552,8 @@ def _rp_value_analysis(league, profiles: dict) -> dict:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _schedule_strength(
-    profiles:     dict,
-    schedule:     dict,
+    profiles: dict,
+    schedule: dict,
     current_week: int,
 ) -> list[dict]:
     """
@@ -576,10 +575,10 @@ def _schedule_strength(
         avg = round(sum(opp_mus) / len(opp_mus), 1) if opp_mus else 0.0
         games_remaining = len(opp_mus)
         rows.append({
-            "team":             name,
-            "sos_mu":           avg,
-            "games_remaining":  games_remaining,
-            "is_mine":          profiles[name]["is_mine"],
+            "team": name,
+            "sos_mu": avg,
+            "games_remaining": games_remaining,
+            "is_mine": profiles[name]["is_mine"],
         })
 
     rows.sort(key=lambda r: -r["sos_mu"])
@@ -617,8 +616,10 @@ def run_season_simulation(league) -> dict:
         schedule, current_week = _get_full_schedule(league)
 
         weeks_remaining = max(0, TOTAL_WEEKS - current_week + 1)
-        print(f"  Running {N_SIMS} season simulations "
-              f"({weeks_remaining} weeks remaining)...")
+        print(
+            f"  Running {N_SIMS} season simulations "
+            f"({weeks_remaining} weeks remaining)..."
+        )
         mc = _run_monte_carlo(profiles, schedule, current_week, N_SIMS)
 
         # ── Combine into a single ranked standings list ──────────────────────
@@ -626,20 +627,20 @@ def run_season_simulation(league) -> dict:
         for name, prof in profiles.items():
             m = mc.get(name, {})
             sim_standings.append({
-                "team":          name,
-                "current_wins":  prof["wins"],
-                "current_losses":prof["losses"],
-                "avg_proj_wins": m.get("avg_wins",  prof["wins"]),
+                "team": name,
+                "current_wins": prof["wins"],
+                "current_losses": prof["losses"],
+                "avg_proj_wins": m.get("avg_wins", prof["wins"]),
                 "avg_proj_losses": TOTAL_WEEKS - m.get("avg_wins", prof["wins"]),
-                "proj_wins_low": m.get("proj_wins_low",  prof["wins"]),
-                "proj_wins_mid": m.get("proj_wins_mid",  prof["wins"]),
-                "proj_wins_high":m.get("proj_wins_high", prof["wins"]),
-                "playoff_pct":   m.get("playoff_pct",  0.0),
-                "champion_pct":  m.get("champion_pct", 0.0),
-                "avg_rank":      m.get("avg_rank",     0.0),
-                "weekly_mu":     round(prof["mu"], 1),
-                "season_pts":    round(prof["season_pts"], 0),
-                "is_mine":       prof["is_mine"],
+                "proj_wins_low": m.get("proj_wins_low", prof["wins"]),
+                "proj_wins_mid": m.get("proj_wins_mid", prof["wins"]),
+                "proj_wins_high": m.get("proj_wins_high", prof["wins"]),
+                "playoff_pct": m.get("playoff_pct", 0.0),
+                "champion_pct": m.get("champion_pct", 0.0),
+                "avg_rank": m.get("avg_rank", 0.0),
+                "weekly_mu": round(prof["mu"], 1),
+                "season_pts": round(prof["season_pts"], 0),
+                "is_mine": prof["is_mine"],
             })
 
         sim_standings.sort(key=lambda r: -r["playoff_pct"])
@@ -656,7 +657,10 @@ def run_season_simulation(league) -> dict:
         if my_team_obj:
             try:
                 player_impact = _player_win_contribution(
-                    my_team_obj, profiles, schedule, current_week,
+                    my_team_obj,
+                    profiles,
+                    schedule,
+                    current_week,
                     n_sims=100,
                 )
             except Exception as exc:
@@ -679,29 +683,29 @@ def run_season_simulation(league) -> dict:
             sched_strength = []
 
         return {
-            "sim_standings":     sim_standings,
-            "player_impact":     player_impact,
-            "rp_analysis":       rp_analysis,
+            "sim_standings": sim_standings,
+            "player_impact": player_impact,
+            "rp_analysis": rp_analysis,
             "schedule_strength": sched_strength,
-            "current_week":      current_week,
-            "total_weeks":       TOTAL_WEEKS,
-            "weeks_remaining":   weeks_remaining,
-            "n_sims":            N_SIMS,
-            "playoff_spots":     PLAYOFF_SPOTS,
-            "error":             None,
+            "current_week": current_week,
+            "total_weeks": TOTAL_WEEKS,
+            "weeks_remaining": weeks_remaining,
+            "n_sims": N_SIMS,
+            "playoff_spots": PLAYOFF_SPOTS,
+            "error": None,
         }
 
     except Exception as exc:
         traceback.print_exc()
         return {
-            "sim_standings":     [],
-            "player_impact":     [],
-            "rp_analysis":       {},
+            "sim_standings": [],
+            "player_impact": [],
+            "rp_analysis": {},
             "schedule_strength": [],
-            "current_week":      1,
-            "total_weeks":       TOTAL_WEEKS,
-            "weeks_remaining":   TOTAL_WEEKS,
-            "n_sims":            N_SIMS,
-            "playoff_spots":     PLAYOFF_SPOTS,
-            "error":             str(exc),
+            "current_week": 1,
+            "total_weeks": TOTAL_WEEKS,
+            "weeks_remaining": TOTAL_WEEKS,
+            "n_sims": N_SIMS,
+            "playoff_spots": PLAYOFF_SPOTS,
+            "error": str(exc),
         }

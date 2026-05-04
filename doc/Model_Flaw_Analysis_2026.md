@@ -129,7 +129,7 @@ For Week 2 (April 6-12, 2026), confirmed two-starters include Tarik Skubal, Max 
 
 **The problem:** The bullpen hierarchy was built at a fixed point. Real 2026 closer situations have already evolved:
 - **ARI**: Listed as "Sewald/Ginkel co-closers" — but Paul Sewald is clearly the closer now per current waiver wire analysis. If a manager in the league owns Ginkel expecting close competition, the model's mixed signal hurts real-time decision making.
-- **HOU**: Josh Hader on IL → Bryan Abreu closing. The model knows this (noted in CLAUDE.md) but it's not dynamically tracked.
+- **HOU**: Josh Hader on IL → Bryan Abreu closing. The model knows this through a static bullpen note, but it's not dynamically tracked.
 - The waiver wire data shows Gregory Soto generating early add activity — suggesting a new or changed closer role somewhere.
 
 The `is_reliever_role()` function uses prior-season GS data. A player who converted from starter to closer this offseason (or vice versa) is misclassified.

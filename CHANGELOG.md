@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - GitHub Actions lint step now reads the shared repo flake8 configuration instead of hard-coding lint flags in the workflow
+- Shared flake8 enforcement now includes `run.py`, `build_statcast_cache.py`, and the related scoring/simulation tests after targeted cleanup reduced the legacy exclude list
 
 ### Fixed
 - `run.py` now validates the loaded Statcast cache and can force a real legacy rebuild by passing `--force` through to cache builder modules that expose `main()`

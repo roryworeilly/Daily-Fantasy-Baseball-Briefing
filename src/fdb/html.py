@@ -168,6 +168,29 @@ def _bar(value):
     )
 
 
+def _state_message(text, tone="", compact=False):
+    cls = "state-message"
+    if tone == "error":
+        cls += " error"
+    if compact:
+        cls += " compact"
+    live = ' role="alert"' if tone == "error" else ' aria-live="polite"'
+    return f'<div class="{cls}"{live}>{esc(text)}</div>'
+
+
+def _state_loading(label="Loading", compact=False):
+    cls = "state-loading compact" if compact else "state-loading"
+    row = (
+        '<div class="skeleton-row" aria-hidden="true">'
+        '<span class="skeleton-avatar"></span>'
+        '<span><span class="skeleton-line long"></span>'
+        '<span class="skeleton-line med mt-8" style="display:block"></span></span>'
+        '<span class="skeleton-line short"></span>'
+        '</div>'
+    )
+    return f'<div class="{cls}" aria-live="polite" aria-label="{esc(label)}">{row}{row}</div>'
+
+
 def _win_gauge(prob):
     ARC    = 157.08
     pct    = prob * 100
@@ -191,7 +214,7 @@ def _win_gauge(prob):
         f' stroke="{color}" stroke-width="10" stroke-linecap="round"'
         f' stroke-dasharray="{filled:.1f} {ARC:.1f}" pathLength="{ARC:.1f}"/>'
         f'<text x="60" y="62" text-anchor="middle" font-size="17"'
-        f' font-weight="900" fill="var(--text)" font-family="Roboto,sans-serif">{pct:.1f}%</text>'
+        f' font-weight="900" fill="var(--text)" font-family="IBM Plex Sans, sans-serif">{pct:.1f}%</text>'
         f'</svg>'
         f'<div class="gauge-sub {tone}">{label}</div>'
         f'</div>'
@@ -223,15 +246,15 @@ def _roster_table(rows, title, subtitle=""):
             f'<tr class="{rc}">'
             f'<td>{_pos_badge(slot)}</td>'
             f'<td>{_pc(r, sub_key="mlb")}</td>'
-            f'<td style="font-size:12px;color:var(--text2)">{esc(r.get("mlb",""))}</td>'
-            f'<td style="font-weight:700">{esc(r.get("proj_pts",""))}</td>'
-            f'<td style="font-weight:700;color:var(--accent)">{esc(r.get("var",""))}</td>'
+            f'<td class="muted-sm">{esc(r.get("mlb",""))}</td>'
+            f'<td class="strong-cell">{esc(r.get("proj_pts",""))}</td>'
+            f'<td class="accent-cell">{esc(r.get("var",""))}</td>'
             f'<td>{_bar(r.get("base", 0))}</td>'
             f'<td>{_bar(r.get("fit", 0))}</td>'
             f'<td><span class="{s_cls}">{esc(r.get("status",""))}</span></td>'
             f'</tr>'
         )
-    body  = "".join(tbody) or '<tr><td colspan="8" style="text-align:center;color:var(--text2)">No data</td></tr>'
+    body  = "".join(tbody) or '<tr><td colspan="8" class="table-empty">No data</td></tr>'
     sub_h = f'<div class="sec-sub">{esc(subtitle)}</div>' if subtitle else ""
     return (
         f'<div class="card mb20">'
@@ -733,19 +756,19 @@ def _roster_cards(rows, title, subtitle=""):
             + status_html
             + f'</div>'
         )
-    body  = "".join(cards) if cards else '<p style="color:var(--text2)">No players</p>'
+    body  = "".join(cards) if cards else '<p class="muted">No players</p>'
     sub_h = f'<div class="sec-sub">{esc(subtitle)}</div>' if subtitle else ""
 
     _roster_section_counter[0] += 1
     sec_id = f"rc-sec-{_roster_section_counter[0]}"
-    list_body = _roster_table_view(rows) if rows else '<p style="color:var(--text2)">No players</p>'
+    list_body = _roster_table_view(rows) if rows else '<p class="muted">No players</p>'
 
     # View toggle buttons: Grid | List
     toggle_btns = (
         f'<div class="rc-view-btns" id="{sec_id}-btns">'
-        f'<button class="rc-view-btn active" onclick="rcToggle(\'{sec_id}\',\'grid\',this)" title="Card grid view">&#9783;</button>'
-        f'<button class="rc-view-btn" onclick="rcToggle(\'{sec_id}\',\'compact\',this)" title="Compact grid view">&#9783;&#xFE0E;</button>'
-        f'<button class="rc-view-btn" onclick="rcToggle(\'{sec_id}\',\'list\',this)" title="List view">&#8801;</button>'
+        f'<button type="button" class="rc-view-btn active" onclick="rcToggle(\'{sec_id}\',\'grid\',this)" title="Card grid view">&#9783;</button>'
+        f'<button type="button" class="rc-view-btn" onclick="rcToggle(\'{sec_id}\',\'compact\',this)" title="Compact grid view">&#9783;&#xFE0E;</button>'
+        f'<button type="button" class="rc-view-btn" onclick="rcToggle(\'{sec_id}\',\'list\',this)" title="List view">&#8801;</button>'
         f'</div>'
     )
 
@@ -927,7 +950,7 @@ def _matchup_scoring_section(my_scoring: list, opp_scoring: list,
     return (
         f'<div class="msb-wrap">'
         f'<div class="msb-header">'
-        f'<span class="msb-title">📋 Week Scoring Breakdown</span>'
+        f'<span class="msb-title">Week Scoring Breakdown</span>'
         f'<span class="msb-legend">'
         f'<span class="msb-legend-good">●</span> scoring '
         f'<span class="msb-legend-bad">●</span> penalties'
@@ -1005,7 +1028,7 @@ def _week_scoring_table(week_data: dict) -> str:
         return team_header + "".join(rows_html)
 
     from fdb.settings import MY_TEAM_NAME
-    my_label  = f"⚾ {MY_TEAM_NAME} — {my_total:+.1f} pts"
+    my_label  = f"{MY_TEAM_NAME} — {my_total:+.1f} pts"
     opp_label = f"🆚 Opponent — {opp_total:+.1f} pts"
 
     css = """<style>
@@ -1107,7 +1130,7 @@ def _hitter_matchups_section(matchups: list) -> str:
     return (
         f'<div class="card mb20">'
         f'<div class="sec-head">'
-        f'<div class="sec-title">📊 Today\'s Hitter Matchups</div>'
+        f'<div class="sec-title">Today\'s Hitter Matchups</div>'
         f'<div class="sec-sub">{len(matchups)} active hitters playing today '
         f'· {favorable} favorable · {tough} tough</div>'
         f'</div>'
@@ -1317,7 +1340,7 @@ def _streaming_plan_section(plan_data: dict) -> str:
             if p["is_on_bench"] else ""
         )
         risk_badge = (
-            '<span class="sp-risk-badge" title="Elevated xFIP or WHIP — ratio risk">⚠ Ratio Risk</span>'
+            '<span class="sp-risk-badge" title="Elevated xFIP or WHIP — ratio risk">Ratio Risk</span>'
             if p["has_ratio_risk"] else ""
         )
         two_start_badge = (
@@ -1403,7 +1426,7 @@ def _streaming_plan_section(plan_data: dict) -> str:
         css
         + f'<div class="card mb20">'
         + f'<div class="sec-head">'
-        + f'<div class="sec-title">📋 Your Pitching Week <span style="font-size:12px;'
+        + f'<div class="sec-title">Your Pitching Week <span style="font-size:12px;'
         + f'font-weight:400;color:var(--text2);margin-left:6px">{esc(week_label)}</span></div>'
         + f'<div class="sec-sub">Rostered pitcher slate · per-start matchup grades · IP tracking · ratio risk flags</div>'
         + f'</div>'
@@ -1421,7 +1444,7 @@ def _streaming_sp_section(streaming_sps: list) -> str:
     SP quality + opponent weakness + park factor + two-start potential.
     """
     if not streaming_sps:
-        return '<div class="card mb20"><div class="sec-head"><div class="sec-title">🎯 SP Streaming</div><div class="sec-sub" style="color:var(--text2)">No streamable SPs found today</div></div></div>'
+        return '<div class="card mb20"><div class="sec-head"><div class="sec-title">SP Streaming</div><div class="sec-sub">No streamable SPs found today</div></div></div>'
 
     GRADE_LABEL = {5: "Elite Stream", 4: "Strong Stream", 3: "Decent Plug", 2: "Risky", 1: "Avoid"}
     GRADE_COLOR = {5: "var(--accent)", 4: "var(--accent)", 3: "var(--text2)", 2: "var(--amber)", 1: "var(--red)"}
@@ -1490,7 +1513,7 @@ def _streaming_sp_section(streaming_sps: list) -> str:
         css +
         f'<div class="card mb20">'
         f'<div class="sec-head">'
-        f'<div class="sec-title">🎯 Daily SP Streaming</div>'
+        f'<div class="sec-title">Daily SP Streaming</div>'
         f'<div class="sec-sub">Available SPs ranked by matchup quality · park factor · 2-start upside · floor</div>'
         f'</div>'
         + "".join(rows) +
@@ -1658,7 +1681,7 @@ def _blueprint_banner(blueprint: dict) -> str:
     return (
         css +
         f'<div class="bp-banner">'
-        f'<div class="bp-title">🎯 Optimal Roster Blueprint</div>'
+        f'<div class="bp-title">Optimal Roster Blueprint</div>'
         f'<div class="bp-pills">{"".join(pills)}</div>'
         f'<div class="bp-summary">{esc(summary)}</div>'
         + priority_html +
@@ -1697,10 +1720,10 @@ def _waiver_section(rows):
         f'</div>'
         # Sub-tabs
         f'<div class="w-subtabs">'
-        f'<button class="w-subtab-btn active" id="wstb-hitters" onclick="switchWaiverTab(\'hitters\')">'
-        f'⚾ Hitters <span class="w-subtab-count">{h_count}</span></button>'
-        f'<button class="w-subtab-btn" id="wstb-pitchers" onclick="switchWaiverTab(\'pitchers\')">'
-        f'⚡ Pitchers <span class="w-subtab-count">{p_count}</span></button>'
+        f'<button type="button" class="w-subtab-btn active" id="wstb-hitters" onclick="switchWaiverTab(\'hitters\')">'
+        f'Hitters <span class="w-subtab-count">{h_count}</span></button>'
+        f'<button type="button" class="w-subtab-btn" id="wstb-pitchers" onclick="switchWaiverTab(\'pitchers\')">'
+        f'Pitchers <span class="w-subtab-count">{p_count}</span></button>'
         f'</div>'
         # Hitter pane
         f'<div class="w-subpane visible" id="wpane-hitters">'
@@ -1774,7 +1797,7 @@ def _activity_section(moves):
                 f'</div>'
             )
 
-    body = "".join(rows) if rows else '<div style="color:var(--text2);font-size:13px">No recent activity</div>'
+    body = "".join(rows) if rows else '<div class="muted-sm">No recent activity</div>'
     return (
         f'<div class="card">'
         f'<div class="sec-head"><div class="sec-title">Recent Activity</div></div>'
@@ -1992,9 +2015,9 @@ def _season_intel_card(season_intel: dict) -> str:
     # ── Trend badge ─────────────────────────────────────────────────────────
     def _trend_badge(trend: str) -> str:
         cfg = {
-            "hot":               ("🔥", "good"),
+            "hot":               ("HOT", "good"),
             "cold":              ("🥶", "bad"),
-            "stable":            ("📊", ""),
+            "stable":            ("STABLE", ""),
             "insufficient_data": ("—",  "muted"),
         }
         icon, cls = cfg.get(trend, ("—", ""))
@@ -2028,17 +2051,17 @@ def _season_intel_card(season_intel: dict) -> str:
             )
             il_rows += (
                 f'<tr>'
-                f'<td><div style="display:flex;align-items:center;gap:8px">'
+                f'<td><div class="inline-player">'
                 f'{av}'
-                f'<div><div class="il-player-name" style="font-size:13px;font-weight:600;color:var(--text1)">{esc(p["name"])}</div>'
-                f'<div style="font-size:11px;color:var(--text2)">'
+                f'<div><div class="il-player-name">{esc(p["name"])}</div>'
+                f'<div class="il-player-meta">'
                 f'{esc(p["pos"])} · {esc(p["mlb"])} · {esc(p["status"])}'
                 f'</div></div></div></td>'
-                f'<td style="text-align:center"><span class="stat-value">{esc(p["stash_score"])}</span></td>'
-                f'<td style="text-align:center"><span class="stat-value">{esc(p["current_val"])}</span></td>'
-                f'<td style="text-align:center">{esc(p["healthy_proj"])}</td>'
+                f'<td class="center-cell"><span class="stat-value">{esc(p["stash_score"])}</span></td>'
+                f'<td class="center-cell"><span class="stat-value">{esc(p["current_val"])}</span></td>'
+                f'<td class="center-cell">{esc(p["healthy_proj"])}</td>'
                 f'<td>{_verdict_badge(p["verdict"])}</td>'
-                f'<td style="font-size:12px;color:var(--text2)">'
+                f'<td class="muted-sm">'
                 f'{_trend_badge(p["trend"])}<br>'
                 f'<span style="font-size:11px">{esc(p["trend_summary"])}</span>'
                 f'</td>'
@@ -2046,16 +2069,16 @@ def _season_intel_card(season_intel: dict) -> str:
             )
         il_section = (
             '<div class="sec-head" style="margin-top:0">'
-            '<div class="sec-title" style="font-size:14px">🏥 Your IL Roster</div>'
+            '<div class="sec-title" style="font-size:14px">Your IL Roster</div>'
             '<div class="sec-sub">Stash score = healthy value · Current val = depressed by injury</div>'
             '</div>'
             '<div style="overflow-x:auto">'
             '<table class="rc-table" style="width:100%">'
             '<thead><tr>'
             '<th>Player</th>'
-            '<th style="text-align:center">Stash</th>'
-            '<th style="text-align:center">Val</th>'
-            '<th style="text-align:center">Proj Pts</th>'
+            '<th class="center-cell">Stash</th>'
+            '<th class="center-cell">Val</th>'
+            '<th class="center-cell">Proj Pts</th>'
             '<th>Verdict</th>'
             '<th>Season Trend</th>'
             '</tr></thead>'
@@ -2066,10 +2089,10 @@ def _season_intel_card(season_intel: dict) -> str:
     else:
         il_section = (
             '<div class="sec-head" style="margin-top:0">'
-            '<div class="sec-title" style="font-size:14px">🏥 Your IL Roster</div>'
+            '<div class="sec-title" style="font-size:14px">Your IL Roster</div>'
             '</div>'
-            '<div style="color:var(--text2);font-size:13px;padding:12px 0">'
-            'No injured players on your roster. Stay healthy! 💪'
+            '<div class="muted-sm">'
+            'No injured players on your roster.'
             '</div>'
         )
 
@@ -2088,28 +2111,28 @@ def _season_intel_card(season_intel: dict) -> str:
             )
             watch_rows += (
                 f'<tr>'
-                f'<td><div style="display:flex;align-items:center;gap:8px">'
+                f'<td><div class="inline-player">'
                 f'{av}'
-                f'<div><div class="il-player-name" style="font-size:13px;font-weight:600;color:var(--text1)">{esc(p["name"])}</div>'
-                f'<div style="font-size:11px;color:var(--text2)">'
+                f'<div><div class="il-player-name">{esc(p["name"])}</div>'
+                f'<div class="il-player-meta">'
                 f'{esc(p["pos"])} · {esc(p["mlb"])} · {esc(p["status"])}'
                 f'</div></div></div></td>'
-                f'<td style="text-align:center"><span class="stat-value">{esc(p["stash_score"])}</span></td>'
-                f'<td style="text-align:center">{esc(p["healthy_proj"])}</td>'
-                f'<td style="font-size:12px;color:var(--text2)">{esc(p["owned_by"])}</td>'
+                f'<td class="center-cell"><span class="stat-value">{esc(p["stash_score"])}</span></td>'
+                f'<td class="center-cell">{esc(p["healthy_proj"])}</td>'
+                f'<td class="muted-sm">{esc(p["owned_by"])}</td>'
                 f'</tr>'
             )
         watch_section = (
             '<div class="sec-head">'
-            '<div class="sec-title" style="font-size:14px">👀 IL Stash Watch</div>'
+            '<div class="sec-title" style="font-size:14px">IL Stash Watch</div>'
             '<div class="sec-sub">High-value injured players on other rosters — monitor for trade or waiver cut</div>'
             '</div>'
             '<div style="overflow-x:auto">'
             '<table class="rc-table" style="width:100%">'
             '<thead><tr>'
             '<th>Player</th>'
-            '<th style="text-align:center">Stash</th>'
-            '<th style="text-align:center">Proj Pts</th>'
+            '<th class="center-cell">Stash</th>'
+            '<th class="center-cell">Proj Pts</th>'
             '<th>Owned By</th>'
             '</tr></thead>'
             '<tbody>' + watch_rows + '</tbody>'
@@ -2119,9 +2142,9 @@ def _season_intel_card(season_intel: dict) -> str:
     else:
         watch_section = (
             '<div class="sec-head">'
-            '<div class="sec-title" style="font-size:14px">👀 IL Stash Watch</div>'
+            '<div class="sec-title" style="font-size:14px">IL Stash Watch</div>'
             '</div>'
-            '<div style="color:var(--text2);font-size:13px;padding:12px 0">'
+            '<div class="muted-sm">'
             'No high-value IL targets found on other rosters right now.'
             '</div>'
         )
@@ -2142,28 +2165,28 @@ def _season_intel_card(season_intel: dict) -> str:
             status_note = p["status"] if p["status"] not in ("ACTIVE", "NORMAL", "") else "Healthy"
             fa_rows += (
                 f'<tr>'
-                f'<td><div style="display:flex;align-items:center;gap:8px">'
+                f'<td><div class="inline-player">'
                 f'{av}'
-                f'<div><div class="il-player-name" style="font-size:13px;font-weight:600;color:var(--text1)">{esc(p["name"])}</div>'
-                f'<div style="font-size:11px;color:var(--text2)">'
+                f'<div><div class="il-player-name">{esc(p["name"])}</div>'
+                f'<div class="il-player-meta">'
                 f'{esc(p["pos"])} · {esc(p["mlb"])}'
                 f'</div></div></div></td>'
-                f'<td style="text-align:center"><span class="stat-value">{esc(p["stash_score"])}</span></td>'
-                f'<td style="text-align:center">{esc(p["healthy_proj"])}</td>'
-                f'<td style="font-size:12px;color:var(--text2)">{esc(status_note)}</td>'
+                f'<td class="center-cell"><span class="stat-value">{esc(p["stash_score"])}</span></td>'
+                f'<td class="center-cell">{esc(p["healthy_proj"])}</td>'
+                f'<td class="muted-sm">{esc(status_note)}</td>'
                 f'</tr>'
             )
         fa_section = (
             '<div class="sec-head">'
-            '<div class="sec-title" style="font-size:14px">🎯 FA Long-Season Targets</div>'
+            '<div class="sec-title" style="font-size:14px">FA Long-Season Targets</div>'
             '<div class="sec-sub">Free agents with strong season-long value — worth rostering now for later payoff</div>'
             '</div>'
             '<div style="overflow-x:auto">'
             '<table class="rc-table" style="width:100%">'
             '<thead><tr>'
             '<th>Player</th>'
-            '<th style="text-align:center">Healthy Score</th>'
-            '<th style="text-align:center">Proj Pts</th>'
+            '<th class="center-cell">Healthy Score</th>'
+            '<th class="center-cell">Proj Pts</th>'
             '<th>Status</th>'
             '</tr></thead>'
             '<tbody>' + fa_rows + '</tbody>'
@@ -2173,9 +2196,9 @@ def _season_intel_card(season_intel: dict) -> str:
     else:
         fa_section = (
             '<div class="sec-head">'
-            '<div class="sec-title" style="font-size:14px">🎯 FA Long-Season Targets</div>'
+            '<div class="sec-title" style="font-size:14px">FA Long-Season Targets</div>'
             '</div>'
-            '<div style="color:var(--text2);font-size:13px;padding:12px 0">'
+            '<div class="muted-sm">'
             'No standout free agent targets above the threshold right now.'
             '</div>'
         )
@@ -2206,7 +2229,7 @@ def _team_viewer_inner(all_team_rosters: dict, my_team_inner: str = "") -> str:
     """
     if not all_team_rosters:
         return (
-            '<div class="card"><div style="color:var(--text2);padding:24px;text-align:center">'
+            '<div class="card"><div class="table-empty">'
             'No team data available.</div></div>'
         )
 
@@ -2271,10 +2294,10 @@ def _team_viewer_inner(all_team_rosters: dict, my_team_inner: str = "") -> str:
     # ── Arrow nav header ──────────────────────────────────────────────────────
     nav_html = (
         '<div class="tv-nav">'
-        '<button class="tv-arrow" onclick="teamViewStep(-1)" aria-label="Previous team">&#8592;</button>'
+        '<button type="button" class="tv-arrow" onclick="teamViewStep(-1)" aria-label="Previous team">&#8592;</button>'
         f'<span class="tv-name" id="tv-team-name">{esc(first_label)}</span>'
         f'<span class="tv-rank-badge" id="tv-rank-badge">{esc(first_rank_label)}</span>'
-        '<button class="tv-arrow" onclick="teamViewStep(1)" aria-label="Next team">&#8594;</button>'
+        '<button type="button" class="tv-arrow" onclick="teamViewStep(1)" aria-label="Next team">&#8594;</button>'
         '</div>'
     )
 
@@ -2298,9 +2321,8 @@ def _lineup_lab_tab(lab: dict) -> str:
         err = lab.get("error", "Unknown") if lab else "Not run"
         return (
             '<div class="tab-pane" data-tab="lineuplab">'
-            '<div class="card mb20" style="margin-top:12px">'
-            f'<div style="color:var(--red);padding:12px;font-weight:600">'
-            f'⚠ Lineup Lab unavailable: {esc(str(err))}</div>'
+            '<div class="card mb20 panel-offset">'
+            f'{_state_message("Lineup Lab unavailable: " + str(err), "error")}'
             '</div></div>'
         )
 
@@ -2512,7 +2534,7 @@ def _lineup_lab_tab(lab: dict) -> str:
 
     optimal_col = (
         '<div class="ll-section">'
-        '<h3>🏆 League-Best Lineup'
+        '<h3>League-Best Lineup'
         '<span style="font-size:11px;font-weight:400;color:var(--text2)">'
         '— best player per slot, any team</span></h3>'
         + optimal_rows +
@@ -2607,7 +2629,7 @@ def _lineup_lab_tab(lab: dict) -> str:
 
     impact_section = (
         '<div class="ll-section">'
-        '<h3>📊 Position Impact & Depth'
+        '<h3>Position Impact & Depth'
         '<span style="font-size:11px;font-weight:400;color:var(--text2)">'
         '— click a position to see top players</span></h3>'
         f'<div class="ll-impact-grid">{impact_cards}</div>'
@@ -2698,7 +2720,7 @@ def _lineup_lab_tab(lab: dict) -> str:
     cmp_section = (
         '<div class="ll-section">'
         '<div class="ll-cmp-header">'
-        '<h3 style="margin:0">⚔ Team Comparison</h3>'
+        '<h3 style="margin:0">Team Comparison</h3>'
         f'<select class="ll-team-select" id="ll-team-sel" onchange="llSwitchTeam(this.value)">'
         f'{dropdown_opts}'
         f'</select>'
@@ -2739,7 +2761,7 @@ def _lineup_lab_tab(lab: dict) -> str:
     above_chips = "".join(_above_chip(pos) for pos in DISPLAY_POSITIONS)
     above_section = (
         '<div class="ll-section">'
-        '<h3>📈 Players Above Replacement Level — By Position</h3>'
+        '<h3>Players Above Replacement Level — By Position</h3>'
         f'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px">'
         f'{above_chips}'
         f'</div>'
@@ -2906,23 +2928,23 @@ def _lineup_lab_tab(lab: dict) -> str:
         # Build the acquire section
         acquire_html = ""
         acquire_html += _cat_group(
-            "🔐", "Holds-Edge Setup Men",  "holds",
+            "HE", "Holds-Edge Setup Men",  "holds",
             holds_tgts,
             explainers.get("HOLDS_EDGE", ""),
         )
         acquire_html += _cat_group(
-            "🎯", "Low-K Contact Hitters", "lowk",
+            "LK", "Low-K Contact Hitters", "lowk",
             lowk_tgts,
             explainers.get("LOW_K_HITTER", ""),
         )
         acquire_html += _cat_group(
-            "💪", "Workhorse Starters",    "workhorse",
+            "SP", "Workhorse Starters",    "workhorse",
             workhorse_tgts,
             explainers.get("WORKHORSE_SP", ""),
         )
         if other_tgts:
             acquire_html += _cat_group(
-                "✨", "Other Format Edges",    "contact",
+                "EDGE", "Other Format Edges",    "contact",
                 other_tgts,
                 "",
             )
@@ -2936,7 +2958,7 @@ def _lineup_lab_tab(lab: dict) -> str:
                 avoid_cards = (
                     '<div style="margin-bottom:10px">'
                     '<div style="font-size:11px;font-weight:700;color:var(--red);'
-                    'margin-bottom:6px">🚫 Players on Other Teams to Avoid Acquiring</div>'
+                    'margin-bottom:6px">Players on Other Teams to Avoid Acquiring</div>'
                     '<div class="ll-trade-grid">'
                     + "".join(_tcard(t, "avoid") for t in avoid_tgts)
                     + '</div></div>'
@@ -2970,7 +2992,7 @@ def _lineup_lab_tab(lab: dict) -> str:
                 sell_table = (
                     '<div style="margin-bottom:6px">'
                     '<div style="font-size:11px;font-weight:700;color:#a855f7;margin-bottom:6px">'
-                    '💸 My Players ESPN Overvalues — Sell These in Trades</div>'
+                    'My Players ESPN Overvalues — Sell These in Trades</div>'
                     '<div style="font-size:11px;color:var(--text2);margin-bottom:8px">'
                     'ESPN projection > our model projection → other managers will overpay for these. '
                     'Use them as trade bait to acquire format-edge players above.</div>'
@@ -2983,7 +3005,7 @@ def _lineup_lab_tab(lab: dict) -> str:
 
             sell_html = (
                 '<div class="ll-trade-section" style="border-color:var(--red)">'
-                '<h3 style="color:var(--red)">🔴 Sell High / Avoid</h3>'
+                '<h3 style="color:var(--red)">Sell High / Avoid</h3>'
                 + avoid_cards
                 + sell_table
                 + '</div>'
@@ -2999,15 +3021,15 @@ def _lineup_lab_tab(lab: dict) -> str:
         chip_row   = (
             f'<div class="ll-explainer-strip">'
             f'<div class="ll-explainer-chip">'
-            f'<strong>🔐 Holds Edge — {n_holds} targets</strong>'
+            f'<strong>Holds Edge — {n_holds} targets</strong>'
             + esc(explainers.get("HOLDS_EDGE", ""))
             + f'</div>'
             f'<div class="ll-explainer-chip">'
-            f'<strong>🎯 Low-K Hitters — {n_lowk} targets</strong>'
+            f'<strong>Low-K Hitters — {n_lowk} targets</strong>'
             + esc(explainers.get("LOW_K_HITTER", ""))
             + f'</div>'
             f'<div class="ll-explainer-chip">'
-            f'<strong>💪 Workhorse SPs — {n_workhorse} targets</strong>'
+            f'<strong>Workhorse SPs — {n_workhorse} targets</strong>'
             + esc(explainers.get("WORKHORSE_SP", ""))
             + f'</div>'
             f'</div>'
@@ -3015,7 +3037,7 @@ def _lineup_lab_tab(lab: dict) -> str:
 
         acquire_section = (
             '<div class="ll-trade-section" style="border-color:var(--accent)">'
-            '<h3>🎯 Format-Edge Trade Targets'
+            '<h3>Format-Edge Trade Targets'
             '<span style="font-size:11px;font-weight:400;color:var(--text2)">'
             '— players other managers systematically underprice in this format</span>'
             '</h3>'
@@ -3248,7 +3270,7 @@ def _how_it_works_tab(sim: dict = None) -> str:
   border:1px solid var(--border);border-radius:16px;padding:28px 28px 24px;
   margin-bottom:20px;box-shadow:var(--shadow)}
 .hiw-hero-title{font-size:22px;font-weight:800;color:var(--text);
-  letter-spacing:-.02em;margin-bottom:6px}
+  letter-spacing:0;margin-bottom:6px}
 .hiw-hero-sub{font-size:13px;color:var(--text2);line-height:1.6;max-width:680px}
 .hiw-hero-badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
 .hiw-badge{font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;
@@ -3331,7 +3353,7 @@ def _how_it_works_tab(sim: dict = None) -> str:
   border-radius:10px;padding:10px 14px;text-align:center}
 .hiw-sim-stat.winner{background:var(--accent-dim);border-color:var(--accent)}
 .hiw-sim-stat .num{font-size:22px;font-weight:800;
-  font-family:"JetBrains Mono","Roboto Condensed",monospace;line-height:1}
+  font-family:var(--font-mono);line-height:1}
 .hiw-sim-stat.winner .num{color:var(--accent)}
 .hiw-sim-stat .lbl{font-size:10px;font-weight:700;color:var(--text2);
   text-transform:uppercase;letter-spacing:.06em;margin-top:3px}
@@ -3408,7 +3430,7 @@ def _how_it_works_tab(sim: dict = None) -> str:
     # ── Hero ──────────────────────────────────────────────────────────────────
     hero = (
         '<div class="hiw-hero">'
-        '<div class="hiw-hero-title">⚙️ How the FDB Model Works</div>'
+        '<div class="hiw-hero-title">How the FDB Model Works</div>'
         '<div class="hiw-hero-sub">'
         'A new-user guide to every layer of the Fantasy Daily Briefing engine — '
         'what data it uses, why it beats ESPN default rankings, '
@@ -3418,7 +3440,7 @@ def _how_it_works_tab(sim: dict = None) -> str:
         '<span class="hiw-badge green">✅ 6 Analytics Phases</span>'
         '<span class="hiw-badge blue">📡 5 Live Data Sources</span>'
         '<span class="hiw-badge amber">🔬 14 Model Improvements</span>'
-        '<span class="hiw-badge purple">🎲 Monte Carlo Validated</span>'
+        '<span class="hiw-badge purple">Monte Carlo Validated</span>'
         '</div>'
         '</div>'
     )
@@ -3465,7 +3487,7 @@ def _how_it_works_tab(sim: dict = None) -> str:
     # ── Data pipeline ─────────────────────────────────────────────────────────
     pipeline = (
         '<div class="hiw-section">'
-        '<h2><span class="hiw-icon">🔄</span>The Data Pipeline — 5 Sources, 6 Phases</h2>'
+        '<h2>The Data Pipeline — 5 Sources, 6 Phases</h2>'
         '<p style="font-size:12px;color:var(--text2);margin-bottom:12px">'
         'Every morning the model fetches fresh data from multiple sources, blends them by confidence weight, '
         'applies regression corrections, and outputs projections for every rostered and waiver-wire player.'
@@ -3547,7 +3569,7 @@ def _how_it_works_tab(sim: dict = None) -> str:
     # ── FDB vs ESPN comparison ────────────────────────────────────────────────
     comparison = (
         '<div class="hiw-section">'
-        '<h2><span class="hiw-icon">⚔️</span>FDB Model vs ESPN Rankings — What\'s Different</h2>'
+        '<h2>FDB Model vs ESPN Rankings — What\'s Different</h2>'
         '<div class="hiw-compare-grid">'
 
         '<div class="hiw-compare-col fdb">'
@@ -3593,7 +3615,7 @@ def _how_it_works_tab(sim: dict = None) -> str:
         '</p>'
         '<div class="hiw-thresh-grid">'
 
-        '<div class="hiw-thresh-card"><h4>⚾ Hitter — Batted Ball</h4>'
+        '<div class="hiw-thresh-card"><h4>Hitter — Batted Ball</h4>'
         '<div class="hiw-thresh-row"><span class="hiw-thresh-name">Exit Velocity</span>'
         '<div><span class="hiw-thresh-val g">&gt;91</span> / '
         '<span class="hiw-thresh-val a">89–91</span> / '
@@ -3612,7 +3634,7 @@ def _how_it_works_tab(sim: dict = None) -> str:
         '<span class="hiw-thresh-val r">&lt;.310</span></div></div>'
         '</div>'
 
-        '<div class="hiw-thresh-card"><h4>⚾ Hitter — Plate Discipline</h4>'
+        '<div class="hiw-thresh-card"><h4>Hitter — Plate Discipline</h4>'
         '<div class="hiw-thresh-row"><span class="hiw-thresh-name">wRC+</span>'
         '<div><span class="hiw-thresh-val g">&gt;140</span> / '
         '<span class="hiw-thresh-val a">100–115</span> / '
@@ -3631,7 +3653,7 @@ def _how_it_works_tab(sim: dict = None) -> str:
         '<span class="hiw-thresh-val r">&lt;26</span></div></div>'
         '</div>'
 
-        '<div class="hiw-thresh-card"><h4>⚡ Pitcher — Stuff & Command</h4>'
+        '<div class="hiw-thresh-card"><h4>Pitcher — Stuff & Command</h4>'
         '<div class="hiw-thresh-row"><span class="hiw-thresh-name">SIERA</span>'
         '<div><span class="hiw-thresh-val g">&lt;3.30</span> / '
         '<span class="hiw-thresh-val a">3.80–4.30</span> / '
@@ -3650,7 +3672,7 @@ def _how_it_works_tab(sim: dict = None) -> str:
         '<span class="hiw-thresh-val r">&lt;40%</span></div></div>'
         '</div>'
 
-        '<div class="hiw-thresh-card"><h4>⚡ Pitcher — Regression Flags</h4>'
+        '<div class="hiw-thresh-card"><h4>Pitcher — Regression Flags</h4>'
         '<div class="hiw-thresh-row"><span class="hiw-thresh-name">LOB % (high)</span>'
         '<span class="hiw-thresh-val r">&gt;78% → sell</span></div>'
         '<div class="hiw-thresh-row"><span class="hiw-thresh-name">HR/FB % (low)</span>'
@@ -3669,7 +3691,7 @@ def _how_it_works_tab(sim: dict = None) -> str:
     # ── Interactive full-season simulation ────────────────────────────────────
     sim_section = (
         '<div class="hiw-section">'
-        '<h2><span class="hiw-icon">🎲</span>Full Season Simulation — FDB vs ESPN (Interactive)</h2>'
+        '<h2>Full Season Simulation — FDB vs ESPN (Interactive)</h2>'
         '<p style="font-size:12px;color:var(--text2);margin-bottom:12px">'
         'This simulation runs a head-to-head 26-week fantasy season using historical data. '
         'Team A drafts using <strong style="color:var(--accent)">FDB model rankings</strong>. '
@@ -3679,8 +3701,8 @@ def _how_it_works_tab(sim: dict = None) -> str:
         '</p>'
 
         '<div class="hiw-sim-controls">'
-        '<button class="hiw-sim-btn primary" onclick="hiwRunSim()">▶ Run Season Simulation</button>'
-        '<button class="hiw-sim-btn" onclick="hiwRunSim(true)">⚡ Quick Run (5 weeks)</button>'
+        '<button type="button" class="hiw-sim-btn primary" onclick="hiwRunSim()">Run Season Simulation</button>'
+        '<button type="button" class="hiw-sim-btn" onclick="hiwRunSim(true)">Quick Run (5 weeks)</button>'
         '<div class="hiw-sim-speed">'
         '<label><input type="checkbox" id="hiw-sim-fast" checked> Fast mode</label>'
         '</div>'
@@ -3716,12 +3738,12 @@ def _how_it_works_tab(sim: dict = None) -> str:
         '<div class="hiw-sim-chart-row">'
 
         '<div class="hiw-sim-chart-box">'
-        '<h4>📊 Points by Category (Season Total)</h4>'
+        '<h4>Points by Category (Season Total)</h4>'
         '<div class="hiw-bar-chart" id="hiw-cat-chart"></div>'
         '</div>'
 
         '<div class="hiw-sim-chart-box">'
-        '<h4>🏆 Cumulative Points Over Season</h4>'
+        '<h4>Cumulative Points Over Season</h4>'
         '<div style="position:relative;width:100%;height:160px;overflow:hidden">'
         '<canvas id="hiw-cum-chart" style="position:absolute;top:0;left:0;width:100%!important;height:160px!important;max-height:160px"></canvas>'
         '</div>'
@@ -3743,7 +3765,7 @@ def _how_it_works_tab(sim: dict = None) -> str:
     # ── League Season Simulation section ─────────────────────────────────────
     league_sim_section = (
         '<div class="hiw-section" id="hiw-league-sim">'
-        '<h2><span class="hiw-icon">🎲</span>Full League Season Simulation</h2>'
+        '<h2>Full League Season Simulation</h2>'
         '<p style="font-size:12px;color:var(--text2);margin-bottom:10px">'
         'Monte Carlo simulation of the remaining season using every team\'s real roster strength. '
         'Run once for a quick read, or loop to accumulate thousands of simulations — '
@@ -3757,17 +3779,17 @@ def _how_it_works_tab(sim: dict = None) -> str:
 
         # Row 1: run buttons + batch size
         '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">'
-        '<button class="hiw-sim-btn primary" id="hiw-run-once-btn" onclick="hiwLeagueRunSim(\'once\')">▶ Run Once</button>'
-        '<button class="hiw-sim-btn" id="hiw-run-loop-btn" onclick="hiwLeagueRunSim(\'loop\')">🔁 Loop</button>'
-        '<button class="hiw-sim-btn" id="hiw-stop-btn" onclick="hiwLeagueStop()" style="display:none;background:var(--red);color:#fff;border-color:var(--red)">⏹ Stop</button>'
+        '<button type="button" class="hiw-sim-btn primary" id="hiw-run-once-btn" onclick="hiwLeagueRunSim(\'once\')">Run Once</button>'
+        '<button type="button" class="hiw-sim-btn" id="hiw-run-loop-btn" onclick="hiwLeagueRunSim(\'loop\')">Loop</button>'
+        '<button type="button" class="hiw-sim-btn" id="hiw-stop-btn" onclick="hiwLeagueStop()" style="display:none;background:var(--red);color:#fff;border-color:var(--red)">Stop</button>'
         '<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2)">'
         '<span>Batch:</span>'
-        '<button class="hiw-batch-btn active" onclick="hiwSetBatch(250,this)">250</button>'
-        '<button class="hiw-batch-btn" onclick="hiwSetBatch(500,this)">500</button>'
-        '<button class="hiw-batch-btn" onclick="hiwSetBatch(1000,this)">1k</button>'
-        '<button class="hiw-batch-btn" onclick="hiwSetBatch(2500,this)">2.5k</button>'
+        '<button type="button" class="hiw-batch-btn active" onclick="hiwSetBatch(250,this)">250</button>'
+        '<button type="button" class="hiw-batch-btn" onclick="hiwSetBatch(500,this)">500</button>'
+        '<button type="button" class="hiw-batch-btn" onclick="hiwSetBatch(1000,this)">1k</button>'
+        '<button type="button" class="hiw-batch-btn" onclick="hiwSetBatch(2500,this)">2.5k</button>'
         '</div>'
-        '<button class="hiw-sim-btn" onclick="hiwLeagueClear()" style="font-size:10px;padding:4px 10px">↺ Reset</button>'
+        '<button type="button" class="hiw-sim-btn" onclick="hiwLeagueClear()" style="font-size:10px;padding:4px 10px">Reset</button>'
         '</div>'
 
         # Row 2: stats bar
@@ -3791,7 +3813,7 @@ def _how_it_works_tab(sim: dict = None) -> str:
         '<div class="hiw-sim-progress-bar" id="hiw-league-prog"></div>'
         '</div>'
         '<div style="font-size:11px;color:var(--text2);margin-bottom:10px;font-style:italic;min-height:16px" '
-        'id="hiw-league-sim-status">Click ▶ Run Once or 🔁 Loop to start.</div>'
+        'id="hiw-league-sim-status">Click Run Once or Loop to start.</div>'
 
         # Run history log
         '<div id="hiw-run-history-wrap" style="display:none;margin-bottom:12px">'
@@ -4122,7 +4144,7 @@ window.hiwLeagueClear=function(){
   document.getElementById('hiw-run-history-wrap').style.display='none';
   document.getElementById('hiw-run-history').innerHTML='';
   document.getElementById('hiw-league-prog').style.width='0%';
-  document.getElementById('hiw-league-sim-status').textContent='Reset. Click ▶ Run Once or 🔁 Loop.';
+  document.getElementById('hiw-league-sim-status').textContent='Reset. Click Run Once or Loop.';
   _updateConfUI();
   var D=FDB_HIW_SIM;
   if(D&&D.teams&&D.teams.length>0){
@@ -4240,7 +4262,7 @@ function _renderTeamTabs(teams,playoffSpots){
     var podClass=t.is_mine?' style="border-color:var(--accent);color:var(--accent)"':'';
     var po=t.playoff_pct>=60?'🟢':t.playoff_pct>=35?'🟡':'🔴';
     var safeName=(t.name||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;');
-    html+='<button class="hiw-sim-btn'+(active?' primary':'')+'" '
+    html+='<button type="button" class="hiw-sim-btn'+(active?' primary':'')+'" '
       +podClass
       +' onclick="hiwSelectTeam('+origIdx+')" title="'+safeName+'">'
       +po+' '+(safeName.length>14?safeName.substring(0,13)+'…':safeName)
@@ -4305,7 +4327,7 @@ function _renderTeamPanel(idx){
       +'<span class="hiw-bar-val">'+pct+'%</span></div>';
   }
   var breakdown='<div class="hiw-sim-chart-box" style="margin-bottom:10px">'
-    +'<h4>📊 Roster Scoring Breakdown</h4>'
+    +'<h4>Roster Scoring Breakdown</h4>'
     +'<div class="hiw-bar-chart">'
     +bBar('Hitting',hitPct,'var(--amber)')
     +bBar('Starting Pitching',spPct,'#3b82f6')
@@ -4332,7 +4354,7 @@ function _renderTeamPanel(idx){
   var piTable='';
   if(t.is_mine&&D.player_impact&&D.player_impact.length>0){
     piTable='<div class="hiw-sim-chart-box" style="margin-bottom:10px">'
-      +'<h4>🏆 Player Win Contributions (Your Team)</h4>'
+      +'<h4>Player Win Contributions (Your Team)</h4>'
       +'<table class="sim-table"><thead><tr><th>Player</th><th>Pos</th>'
       +'<th>Wkly Pts</th><th>Win +/-</th><th>% of Team</th></tr></thead><tbody>';
     D.player_impact.slice(0,15).forEach(function(p){
@@ -4352,7 +4374,7 @@ function _renderTeamPanel(idx){
   var sortedByPO=teams.slice().sort(function(a,b){return b.playoff_pct-a.playoff_pct;});
   var myRank=sortedByPO.findIndex(function(x){return x.name===t.name;})+1;
   var standingsHtml='<div class="hiw-sim-chart-box">'
-    +'<h4>📋 Full League Standings (Projected)</h4>'
+    +'<h4>Full League Standings (Projected)</h4>'
     +'<table class="sim-table"><thead><tr><th>#</th><th>Team</th><th>Cur W-L</th>'
     +'<th>Proj Wins</th><th>Playoff%</th><th>Champ%</th></tr></thead><tbody>';
   sortedByPO.forEach(function(tm,rank){
@@ -4379,7 +4401,7 @@ function _renderTeamPanel(idx){
     +'<div class="hiw-sim-chart-row">'
     +breakdown
     +'<div>'
-    +'<div class="hiw-sim-chart-box" style="margin-bottom:10px"><h4>🎯 Weakpoint Analysis</h4>'
+    +'<div class="hiw-sim-chart-box" style="margin-bottom:10px"><h4>Weakpoint Analysis</h4>'
     +weakHtml
     +'</div>'
     +'</div></div>'
@@ -4398,13 +4420,13 @@ document.addEventListener('DOMContentLoaded',function(){
     document.getElementById('hiw-league-meta').textContent=
       'Wk '+(D.current_week||1)+'/'+(D.total_weeks||26)+' · '+(D.playoff_spots||6)+' playoff spots · '+D.teams.length+' teams';
     document.getElementById('hiw-league-sim-status').textContent=
-      'Briefing data loaded — click ▶ Run Once to simulate, or 🔁 Loop to build confidence over time.';
+      'Briefing data loaded — click Run Once to simulate, or Loop to build confidence over time.';
     _updateConfUI();
     _renderTeamTabs(D.teams,D.playoff_spots||6);
     _renderTeamPanel(_L.currentTeamIdx);
   } else {
     document.getElementById('hiw-league-sim-status').textContent=
-      'Click ▶ Run Once or 🔁 Loop to generate projections.';
+      'Click Run Once or Loop to generate projections.';
     _updateConfUI();
   }
 });
@@ -4417,7 +4439,7 @@ document.addEventListener('DOMContentLoaded',function(){
     return (
         '<div class="tab-pane" data-tab="howitworks" style="display:none">'
         + css
-        + '<div style="max-width:960px;margin:0 auto;padding:12px 0">'
+        + '<div class="narrow-shell">'
         + hero
         + league_sim_section
         + scoring
@@ -4441,8 +4463,8 @@ def _season_sim_tab(sim: dict) -> str:
         err = sim.get("error", "Unknown error") if sim else "Simulation not run"
         return (
             '<div class="tab-pane" data-tab="seasonsim">'
-            '<div class="card mb20" style="margin-top:12px">'
-            f'<div style="color:var(--red);font-weight:600;padding:12px">⚠ Season simulation unavailable: {esc(str(err))}</div>'
+            '<div class="card mb20 panel-offset">'
+            f'{_state_message("Season simulation unavailable: " + str(err), "error")}'
             '</div></div>'
         )
 
@@ -4463,7 +4485,7 @@ def _season_sim_tab(sim: dict) -> str:
 .sim-hero-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;
   padding:12px 16px;box-shadow:var(--shadow);text-align:center}
 .sim-hero-num{font-size:26px;font-weight:800;color:var(--accent);
-  font-family:"JetBrains Mono","Roboto Condensed",monospace;line-height:1}
+  font-family:var(--font-mono);line-height:1}
 .sim-hero-lbl{font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;
   letter-spacing:.08em;margin-top:4px}
 .sim-section{background:var(--surface);border:1px solid var(--border);border-radius:12px;
@@ -4575,7 +4597,7 @@ def _season_sim_tab(sim: dict) -> str:
     standings_rows = "".join(_standing_row2(i, r) for i, r in enumerate(standings))
     standings_html = (
         '<div class="sim-section">'
-        '<h3>📊 Projected Final Standings <span style="font-size:11px;font-weight:400;color:var(--text2)">'
+        '<h3>Projected Final Standings <span style="font-size:11px;font-weight:400;color:var(--text2)">'
         f'— {n_sims:,} simulations, sorted by playoff %</span></h3>'
         '<div style="overflow-x:auto">'
         '<table class="sim-table">'
@@ -4612,7 +4634,7 @@ def _season_sim_tab(sim: dict) -> str:
         my_bd   = rp.get("my_team_breakdown", {})
 
         insight_html = (
-            f'<div class="sim-insight">⚾ <strong>Holds Edge:</strong> {esc(insight)}</div>'
+            f'<div class="sim-insight"><strong>Holds Edge:</strong> {esc(insight)}</div>'
             if insight else ""
         )
 
@@ -4737,7 +4759,7 @@ def _season_sim_tab(sim: dict) -> str:
         pi_rows = "".join(_pi_row(r) for r in pi)
         pi_section = (
             '<div class="sim-section">'
-            '<h3>🎯 My Team — Player Win Contributions'
+            '<h3>My Team — Player Win Contributions'
             '<span style="font-size:11px;font-weight:400;color:var(--text2)">'
             ' — estimated wins added vs. replacement (100 sim avg)</span></h3>'
             '<div style="overflow-x:auto">'
@@ -4886,7 +4908,7 @@ def _pace_visual_scoreboard(rows: list, current_week: int) -> str:
         bar_fill = min(100, max(0, round(actual / max(expected_by_now, 1) * 100, 0)))
 
         if delta_pct >= 15:
-            bar_color = "var(--accent)"; status = "🔥 Hot"
+            bar_color = "var(--accent)"; status = "Hot"
         elif delta_pct >= 5:
             bar_color = "#22c55e"; status = "↑ On pace"
         elif delta_pct >= -5:
@@ -4894,7 +4916,7 @@ def _pace_visual_scoreboard(rows: list, current_week: int) -> str:
         elif delta_pct >= -15:
             bar_color = "var(--amber)"; status = "↓ Slow start"
         else:
-            bar_color = "var(--red)"; status = "⚠ Cold"
+            bar_color = "var(--red)"; status = "Cold"
 
         sign = "+" if delta_pct >= 0 else ""
         cards.append(
@@ -4937,7 +4959,7 @@ def _pace_visual_scoreboard(rows: list, current_week: int) -> str:
         css +
         f'<div class="card mb20">'
         f'<div class="sec-head">'
-        f'<div class="sec-title">📊 Season Pace — Quick View</div>'
+        f'<div class="sec-title">Season Pace — Quick View</div>'
         f'<div class="sec-sub">Actual pts vs expected by week {current_week} · Click the table below for full detail</div>'
         f'</div>'
         f'<div class="pv-grid">{"".join(cards)}</div>'
@@ -4962,10 +4984,8 @@ def _season_pace_tab(pace: dict) -> str:
     if pace.get("error") and not pace.get("my_team_rows"):
         return (
             '<div class="tab-pane" data-tab="seasonpace" style="display:none">'
-            '<div class="card mb20" style="margin-top:12px">'
-            f'<div style="color:var(--red);font-weight:600;padding:12px">'
-            f'⚠ Season pace data unavailable: {esc(str(pace.get("error","")))} — '
-            'run the briefing with an active ESPN connection.</div>'
+            '<div class="card mb20 panel-offset">'
+            f'{_state_message("Season pace data unavailable: " + str(pace.get("error","")) + " — run the briefing with an active ESPN connection.", "error")}'
             '</div></div>'
         )
 
@@ -5091,12 +5111,12 @@ def _season_pace_tab(pace: dict) -> str:
         '<div class="tab-pane" data-tab="seasonpace" style="display:none">'
         + css
         + f'<script>var FDB_PACE_DATA={pace_json};</script>'
-        + '<div style="max-width:960px;margin:0 auto;padding:12px 0">'
+        + '<div class="narrow-shell">'
 
         # Page header
         + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
         + '<div>'
-        + '<div style="font-size:18px;font-weight:800;color:var(--text)">📈 Season Pace Tracker</div>'
+        + '<div style="font-size:18px;font-weight:800;color:var(--text)">Season Pace Tracker</div>'
         + f'<div style="font-size:12px;color:var(--text2)">Week {cw} of {tw} · {wr} weeks remaining · '
         + 'Actual FP vs pace-based + model projections</div>'
         + '</div>'
@@ -5115,7 +5135,7 @@ def _season_pace_tab(pace: dict) -> str:
 
         # Chart row
         + '<div class="sp-chart-box">'
-        + '<h3>📊 Pace vs Projections — Top 12 Active Players</h3>'
+        + '<h3>Pace vs Projections — Top 12 Active Players</h3>'
         + legend
         + '<div style="position:relative;height:200px;max-height:200px">'
         + '<canvas id="sp-main-chart"></canvas>'
@@ -5124,12 +5144,12 @@ def _season_pace_tab(pace: dict) -> str:
 
         # Controls
         + '<div class="sp-controls">'
-        + '<button class="sp-filter-btn active" onclick="spFilter(\'all\',this)">All</button>'
-        + '<button class="sp-filter-btn" onclick="spFilter(\'hitters\',this)">Hitters</button>'
-        + '<button class="sp-filter-btn" onclick="spFilter(\'pitchers\',this)">Pitchers</button>'
-        + '<button class="sp-filter-btn" onclick="spFilter(\'active\',this)">Active Only</button>'
-        + '<button class="sp-filter-btn" onclick="spFilter(\'outperforming\',this)">🔥 Pace > FDB</button>'
-        + '<button class="sp-filter-btn" onclick="spFilter(\'underperforming\',this)">⚠ Pace &lt; FDB</button>'
+        + '<button type="button" class="sp-filter-btn active" onclick="spFilter(\'all\',this)">All</button>'
+        + '<button type="button" class="sp-filter-btn" onclick="spFilter(\'hitters\',this)">Hitters</button>'
+        + '<button type="button" class="sp-filter-btn" onclick="spFilter(\'pitchers\',this)">Pitchers</button>'
+        + '<button type="button" class="sp-filter-btn" onclick="spFilter(\'active\',this)">Active Only</button>'
+        + '<button type="button" class="sp-filter-btn" onclick="spFilter(\'outperforming\',this)">Pace &gt; FDB</button>'
+        + '<button type="button" class="sp-filter-btn" onclick="spFilter(\'underperforming\',this)">Pace &lt; FDB</button>'
         + '<input class="sp-search" type="text" placeholder="Search player…" oninput="spSearch(this.value)" id="sp-search-box">'
         + '</div>'
 
@@ -5211,7 +5231,7 @@ function _renderHero(team){
     +'<div class="lbl">FDB Model</div><div class="sub">Pre-season + live blend</div></div>'
     +'<div class="sp-stat"><div class="num" style="color:'+dCol+'">'
     +(diff>=0?'+':'')+diff.toFixed(0)+'</div>'
-    +'<div class="lbl">Pace vs FDB</div><div class="sub">'+(diff>=0?'Outperforming 🔥':'Behind pace ⚠')+'</div></div>'
+    +'<div class="lbl">Pace vs FDB</div><div class="sub">'+(diff>=0?'Outperforming':'Behind pace')+'</div></div>'
     +'<div class="sp-stat"><div class="num">'+cw+'/'+tw+'</div>'
     +'<div class="lbl">Week</div><div class="sub">'+pct+'% of season</div></div>';
 }
@@ -5265,7 +5285,7 @@ function _renderTable(){
       +'<td style="font-family:\'JetBrains Mono\',monospace">'+r.avg_per_week.toFixed(1)+'</td>'
       +'</tr>';
   });
-  document.getElementById('sp-tbody').innerHTML=html||'<tr><td colspan="11" style="color:var(--text2);padding:16px;text-align:center">No players match filter.</td></tr>';
+  document.getElementById('sp-tbody').innerHTML=html||'<tr><td colspan="11" class="table-empty">No players match filter.</td></tr>';
 }
 
 var _chartTimer=null;
@@ -5347,7 +5367,7 @@ function _renderTeamTabs2(){
   teams.forEach(function(t,idx){
     var active=idx===_spState.teamIdx;
     var mine=t.is_mine?' style="border-color:var(--accent);color:var(--accent)"':'';
-    html+='<button class="sp-team-tab'+(active?' active':'')+'"'
+    html+='<button type="button" class="sp-team-tab'+(active?' active':'')+'"'
       +mine+' onclick="spSelectTeam('+idx+')">'
       +(t.is_mine?'★ ':'')+( t.team_name.length>16?t.team_name.slice(0,15)+'…':t.team_name)
       +'</button>';
@@ -5451,8 +5471,8 @@ def render_html(data):
             f'{esc(matchup["status"])} &middot; Week {matchup["week"]}'
             f'</span></div>'
             # Live scoring feed — populated by LiveScoring JS module
-            f'<div id="live-scoring-feed">'
-            f'<div class="ls-loading-text">⏳ Loading today\'s scoring…</div>'
+            f'<div id="live-scoring-feed" aria-live="polite">'
+            f'<div class="ls-loading-text">{_state_loading("Loading today scoring")}</div>'
             f'</div>'
         )
         # Append weekly scoring breakdown below score display
@@ -5464,7 +5484,7 @@ def render_html(data):
         )
         matchup_html += scoring_section
     else:
-        matchup_html = '<div style="color:var(--text2);padding:20px 0;text-align:center">No active matchup</div>'
+        matchup_html = _state_message("No active matchup")
 
     kv_items = []
     if wp:
@@ -5490,7 +5510,7 @@ def render_html(data):
     inj_html = (
         "".join(f'<div class="inj-item">{esc(i)}</div>' for i in data.get("injuries", []))
         if data.get("injuries")
-        else '<div style="color:var(--text2);font-size:13px">No injury alerts</div>'
+        else '<div class="muted-sm">No injury alerts</div>'
     )
 
     inj_tone = "bad" if ms["injury_count"] > 0 else ""
@@ -5554,10 +5574,9 @@ def render_html(data):
         '<div class="card"><div class="sec-head"><div class="sec-title">Live Matchup</div></div>'
         + matchup_html
         + '</div>'
-        '<div class="card" style="display:flex;flex-direction:column;align-items:center;'
-        'justify-content:center;gap:16px">'
+        '<div class="card matchup-summary-card">'
         + gauge
-        + '<div class="kv-list" style="width:100%">' + kv_html + '</div>'
+        + '<div class="kv-list">' + kv_html + '</div>'
         + '</div>'
         '</div>'
         + week_scoring_html
@@ -5577,22 +5596,22 @@ def render_html(data):
     _news_banner = (
         '<div class="card mb20">'
         '<div class="sec-head">'
-        '<div class="sec-title">📰 Roster News</div>'
+        '<div class="sec-title">Roster News</div>'
         '<div class="sec-sub">Recent notable performances from your roster</div>'
         '</div>'
-        '<div id="news-list-wrap"><div class="news-loading">Loading news…</div></div>'
+        f'<div id="news-list-wrap" aria-live="polite"><div class="news-loading">{_state_loading("Loading roster news")}</div></div>'
         '</div>'
     )
 
     tab_today = (
         '<div class="tab-pane" data-tab="today">'
         '<div class="inner-tabs">'
-        '<button class="inner-tab-btn active" id="tdtb-overview" '
-        'onclick="switchTodayTab(\'overview\')">📊 Overview</button>'
-        '<button class="inner-tab-btn" id="tdtb-waivers" '
-        'onclick="switchTodayTab(\'waivers\')">🔄 Waivers</button>'
-        '<button class="inner-tab-btn" id="tdtb-compare" '
-        'onclick="switchTodayTab(\'compare\')">⚔ Compare</button>'
+        '<button type="button" class="inner-tab-btn active" id="tdtb-overview" '
+        'onclick="switchTodayTab(\'overview\')">Overview</button>'
+        '<button type="button" class="inner-tab-btn" id="tdtb-waivers" '
+        'onclick="switchTodayTab(\'waivers\')">Waivers</button>'
+        '<button type="button" class="inner-tab-btn" id="tdtb-compare" '
+        'onclick="switchTodayTab(\'compare\')">Compare</button>'
         '</div>'
         '<div class="today-pane visible" id="tdpane-overview">'
         + _news_banner
@@ -5652,17 +5671,17 @@ def render_html(data):
         '<div class="mc-settings-bar">'
         '<label>Predict Year:</label>'
         '<div class="mc-year-btns">'
-        '<button class="mc-year-btn" onclick="mcSetYear(2025)">2025</button>'
-        '<button class="mc-year-btn active" onclick="mcSetYear(2024)">2024</button>'
-        '<button class="mc-year-btn" onclick="mcSetYear(2023)">2023</button>'
-        '<button class="mc-year-btn" onclick="mcSetYear(2022)">2022</button>'
+        '<button type="button" class="mc-year-btn" onclick="mcSetYear(2025)">2025</button>'
+        '<button type="button" class="mc-year-btn active" onclick="mcSetYear(2024)">2024</button>'
+        '<button type="button" class="mc-year-btn" onclick="mcSetYear(2023)">2023</button>'
+        '<button type="button" class="mc-year-btn" onclick="mcSetYear(2022)">2022</button>'
         '</div>'
         '<div class="mc-divider"></div>'
         '<label>Prior Years:</label>'
         '<div class="mc-prior-btns">'
-        '<button class="mc-prior-btn" onclick="mcSetPrior(1)">1yr</button>'
-        '<button class="mc-prior-btn active" onclick="mcSetPrior(2)">2yr</button>'
-        '<button class="mc-prior-btn" onclick="mcSetPrior(3)">3yr</button>'
+        '<button type="button" class="mc-prior-btn" onclick="mcSetPrior(1)">1yr</button>'
+        '<button type="button" class="mc-prior-btn active" onclick="mcSetPrior(2)">2yr</button>'
+        '<button type="button" class="mc-prior-btn" onclick="mcSetPrior(3)">3yr</button>'
         '</div>'
         '</div>'
 
@@ -5673,28 +5692,28 @@ def render_html(data):
         # ── Stat metric cards ─────────────────────────────────────────────────
         '<div class="mc-stat-cards">'
         '<div class="mc-stat-card">'
-        '<h3>🏆 Spearman ρ (Hitters)</h3>'
+        '<h3>Spearman ρ (Hitters)</h3>'
         '<div class="mc-stat-cmp">'
         '<div class="mc-stat-val fdb"><div class="label">FDB</div><div class="number" id="mc-hRho1">0.71</div></div>'
         '<div class="mc-stat-val espn"><div class="label">ESPN</div><div class="number" id="mc-hRho2">0.57</div></div>'
         '</div><div class="mc-stat-desc">Rank correlation: actual vs projected finish</div></div>'
 
         '<div class="mc-stat-card">'
-        '<h3>📊 Rank MAE (Hitters)</h3>'
+        '<h3>Rank MAE (Hitters)</h3>'
         '<div class="mc-stat-cmp">'
         '<div class="mc-stat-val fdb"><div class="label">FDB</div><div class="number" id="mc-hMae1">8.2</div></div>'
         '<div class="mc-stat-val espn"><div class="label">ESPN</div><div class="number" id="mc-hMae2">11.4</div></div>'
         '</div><div class="mc-stat-desc">Avg rank distance from actual finish</div></div>'
 
         '<div class="mc-stat-card">'
-        '<h3>🎯 Precision@20 (Hitters)</h3>'
+        '<h3>Precision@20 (Hitters)</h3>'
         '<div class="mc-stat-cmp">'
         '<div class="mc-stat-val fdb"><div class="label">FDB</div><div class="number" id="mc-hPrec1">80%</div></div>'
         '<div class="mc-stat-val espn"><div class="label">ESPN</div><div class="number" id="mc-hPrec2">65%</div></div>'
         '</div><div class="mc-stat-desc">Top-20 picks that delivered top-20 value</div></div>'
 
         '<div class="mc-stat-card">'
-        '<h3>🤖 Draft Win Rate</h3>'
+        '<h3>Draft Win Rate</h3>'
         '<div class="mc-stat-cmp">'
         '<div class="mc-stat-val fdb"><div class="label">FDB Win</div><div class="number" id="mc-fdbWin">61.4%</div></div>'
         '<div class="mc-stat-val espn"><div class="label">ESPN Win</div><div class="number" id="mc-espnWin">33.2%</div></div>'
@@ -5704,24 +5723,24 @@ def render_html(data):
         # ── Charts ────────────────────────────────────────────────────────────
         '<div class="mc-charts-grid">'
         '<div class="mc-chart-box">'
-        '<h3>📈 Ranking Accuracy by Position</h3>'
+        '<h3>Ranking Accuracy by Position</h3>'
         '<canvas id="mc-accuracyChart"></canvas>'
         '</div>'
         '<div class="mc-chart-box">'
-        '<h3>🎲 Draft Simulation Results</h3>'
+        '<h3>Draft Simulation Results</h3>'
         '<canvas id="mc-draftChart"></canvas>'
         '</div>'
         '</div>'
 
         # ── Insight callout ───────────────────────────────────────────────────
         '<div class="mc-insight" id="mc-insight">'
-        '⚡ <strong>FDB outranks ESPN by 24.6% accuracy</strong> on hitter projections for 2024 — '
+        '<strong>FDB outranks ESPN by 24.6% accuracy</strong> on hitter projections for 2024 — '
         'driven by Statcast batted-ball metrics, FIP-based pitcher valuation, and BABIP regression.'
         '</div>'
 
         # ── Scatter plot ──────────────────────────────────────────────────────
         '<div class="mc-scatter-box">'
-        '<h3>🔍 Projected Rank vs Actual Finish (Top 30)</h3>'
+        '<h3>Projected Rank vs Actual Finish (Top 30)</h3>'
         '<div class="mc-scatter-legend">'
         '<div class="mc-legend-item"><div class="mc-legend-dot fdb-correct"></div>FDB closer to actual</div>'
         '<div class="mc-legend-item"><div class="mc-legend-dot espn-correct"></div>ESPN closer to actual</div>'
@@ -5731,11 +5750,11 @@ def render_html(data):
         '</div>'
 
         # ── Value Plays ───────────────────────────────────────────────────────
-        '<div class="mc-section-title">🚀 Key Value Plays — FDB Correctly Identified</div>'
+        '<div class="mc-section-title">Key Value Plays — FDB Correctly Identified</div>'
         '<div class="mc-player-cards">'
         '<div class="mc-player-card value-play"><div class="mc-player-header">'
         '<div><div class="mc-player-name">Cole Ragans</div><div class="mc-player-team">KC · SP</div></div>'
-        '<div class="mc-player-emoji">🎯</div></div>'
+        '<div class="mc-player-emoji">VAL</div></div>'
         '<div class="mc-player-ranks">'
         '<div class="mc-rank-item"><div class="label">FDB Rank</div><div class="value" style="color:var(--accent)">#14</div></div>'
         '<div class="mc-rank-item"><div class="label">ESPN Rank</div><div class="value" style="color:#f59e0b">#38</div></div>'
@@ -5746,7 +5765,7 @@ def render_html(data):
 
         '<div class="mc-player-card value-play"><div class="mc-player-header">'
         '<div><div class="mc-player-name">Paul Skenes</div><div class="mc-player-team">PIT · SP</div></div>'
-        '<div class="mc-player-emoji">⚡</div></div>'
+        '<div class="mc-player-emoji">BRK</div></div>'
         '<div class="mc-player-ranks">'
         '<div class="mc-rank-item"><div class="label">FDB Rank</div><div class="value" style="color:var(--accent)">#9</div></div>'
         '<div class="mc-rank-item"><div class="label">ESPN Rank</div><div class="value" style="color:#f59e0b">#41</div></div>'
@@ -5757,7 +5776,7 @@ def render_html(data):
 
         '<div class="mc-player-card value-play"><div class="mc-player-header">'
         '<div><div class="mc-player-name">Bobby Witt Jr.</div><div class="mc-player-team">KC · SS</div></div>'
-        '<div class="mc-player-emoji">🏃</div></div>'
+        '<div class="mc-player-emoji">SPD</div></div>'
         '<div class="mc-player-ranks">'
         '<div class="mc-rank-item"><div class="label">FDB Rank</div><div class="value" style="color:var(--accent)">#3</div></div>'
         '<div class="mc-rank-item"><div class="label">ESPN Rank</div><div class="value" style="color:#f59e0b">#12</div></div>'
@@ -5768,7 +5787,7 @@ def render_html(data):
 
         '<div class="mc-player-card value-play"><div class="mc-player-header">'
         '<div><div class="mc-player-name">Hunter Brown</div><div class="mc-player-team">HOU · SP</div></div>'
-        '<div class="mc-player-emoji">🔥</div></div>'
+        '<div class="mc-player-emoji">VAL</div></div>'
         '<div class="mc-player-ranks">'
         '<div class="mc-rank-item"><div class="label">FDB Rank</div><div class="value" style="color:var(--accent)">#19</div></div>'
         '<div class="mc-rank-item"><div class="label">ESPN Rank</div><div class="value" style="color:#f59e0b">#47</div></div>'
@@ -5779,7 +5798,7 @@ def render_html(data):
 
         '<div class="mc-player-card value-play"><div class="mc-player-header">'
         '<div><div class="mc-player-name">Josh Lowe</div><div class="mc-player-team">TB · OF</div></div>'
-        '<div class="mc-player-emoji">💨</div></div>'
+        '<div class="mc-player-emoji">SPD</div></div>'
         '<div class="mc-player-ranks">'
         '<div class="mc-rank-item"><div class="label">FDB Rank</div><div class="value" style="color:var(--accent)">#28</div></div>'
         '<div class="mc-rank-item"><div class="label">ESPN Rank</div><div class="value" style="color:#f59e0b">#67</div></div>'
@@ -5790,11 +5809,11 @@ def render_html(data):
         '</div>'
 
         # ── Regression Calls ──────────────────────────────────────────────────
-        '<div class="mc-section-title">⚠️ Regression Calls — FDB Avoided These Busts</div>'
+        '<div class="mc-section-title">Regression Calls — FDB Avoided These Busts</div>'
         '<div class="mc-player-cards">'
         '<div class="mc-player-card regression"><div class="mc-player-header">'
         '<div><div class="mc-player-name">Marcell Ozuna</div><div class="mc-player-team">ATL · DH</div></div>'
-        '<div class="mc-player-emoji">📉</div></div>'
+        '<div class="mc-player-emoji">REG</div></div>'
         '<div class="mc-player-ranks">'
         '<div class="mc-rank-item"><div class="label">FDB Rank</div><div class="value" style="color:var(--accent)">#52</div></div>'
         '<div class="mc-rank-item"><div class="label">ESPN Rank</div><div class="value" style="color:#f59e0b">#18</div></div>'
@@ -5805,7 +5824,7 @@ def render_html(data):
 
         '<div class="mc-player-card regression"><div class="mc-player-header">'
         '<div><div class="mc-player-name">Corbin Carroll</div><div class="mc-player-team">ARI · OF</div></div>'
-        '<div class="mc-player-emoji">📉</div></div>'
+        '<div class="mc-player-emoji">REG</div></div>'
         '<div class="mc-player-ranks">'
         '<div class="mc-rank-item"><div class="label">FDB Rank</div><div class="value" style="color:var(--accent)">#31</div></div>'
         '<div class="mc-rank-item"><div class="label">ESPN Rank</div><div class="value" style="color:#f59e0b">#8</div></div>'
@@ -5816,7 +5835,7 @@ def render_html(data):
 
         '<div class="mc-player-card regression"><div class="mc-player-header">'
         '<div><div class="mc-player-name">Paul Goldschmidt</div><div class="mc-player-team">STL · 1B</div></div>'
-        '<div class="mc-player-emoji">📉</div></div>'
+        '<div class="mc-player-emoji">REG</div></div>'
         '<div class="mc-player-ranks">'
         '<div class="mc-rank-item"><div class="label">FDB Rank</div><div class="value" style="color:var(--accent)">#44</div></div>'
         '<div class="mc-rank-item"><div class="label">ESPN Rank</div><div class="value" style="color:#f59e0b">#16</div></div>'
@@ -5827,7 +5846,7 @@ def render_html(data):
 
         '<div class="mc-player-card regression"><div class="mc-player-header">'
         '<div><div class="mc-player-name">Spencer Strider</div><div class="mc-player-team">ATL · SP</div></div>'
-        '<div class="mc-player-emoji">⚠️</div></div>'
+        '<div class="mc-player-emoji">RISK</div></div>'
         '<div class="mc-player-ranks">'
         '<div class="mc-rank-item"><div class="label">FDB Rank</div><div class="value" style="color:var(--accent)">#27</div></div>'
         '<div class="mc-rank-item"><div class="label">ESPN Rank</div><div class="value" style="color:#f59e0b">#4</div></div>'
@@ -5838,7 +5857,7 @@ def render_html(data):
         '</div>'
 
         # ── Top 30 Table ──────────────────────────────────────────────────────
-        '<div class="mc-section-title">📊 Top 30 Player Rankings Comparison</div>'
+        '<div class="mc-section-title">Top 30 Player Rankings Comparison</div>'
         '<div class="mc-table-wrap"><table class="mc-table">'
         '<thead><tr><th>#</th><th>Player</th><th>Pos</th><th>FDB Rank</th><th>ESPN Rank</th><th>Actual Finish</th><th>Edge</th></tr></thead>'
         '<tbody id="mc-rankings-body">'
@@ -5866,7 +5885,7 @@ def render_html(data):
 
         # ── Methodology ───────────────────────────────────────────────────────
         '<div class="mc-method-box">'
-        '<h3>📚 FDB Model Methodology</h3>'
+        '<h3>FDB Model Methodology</h3>'
         '<div class="mc-method-grid">'
         '<div class="mc-method-item"><h4>Statcast Signals</h4><p>xwOBA, Barrel%, Hard%, Exit Velocity, Sprint Speed — the underlying process metrics that predict future performance better than rate stats.</p></div>'
         '<div class="mc-method-item"><h4>Regression Correction</h4><p>BABIP regressed 60% toward .300 mean. FIP/xFIP over ERA removes fielding noise. Strips luck from historical performance.</p></div>'
@@ -5876,13 +5895,13 @@ def render_html(data):
         '</div>'
 
         # ── Draft Room ────────────────────────────────────────────────────────
-        '<div class="mc-section-title">🏟️ Draft Room — Simulated 10-Team Snake Draft</div>'
+        '<div class="mc-section-title">Draft Room — Simulated 10-Team Snake Draft</div>'
         '<p style="color:var(--text2);font-size:13px;margin:-8px 0 16px">Three fully simulated 10-team snake drafts (15 rounds). '
         '<strong>Team 1 = FDB model</strong> — Teams 2–10 use ESPN rankings.</p>'
         '<div class="dr-tab-bar">'
-        '<button class="dr-tab active" onclick="drSwitch(1)">Draft #1</button>'
-        '<button class="dr-tab" onclick="drSwitch(2)">Draft #2</button>'
-        '<button class="dr-tab" onclick="drSwitch(3)">Draft #3</button>'
+        '<button type="button" class="dr-tab active" onclick="drSwitch(1)">Draft #1</button>'
+        '<button type="button" class="dr-tab" onclick="drSwitch(2)">Draft #2</button>'
+        '<button type="button" class="dr-tab" onclick="drSwitch(3)">Draft #3</button>'
         '</div>'
         '<div id="dr-panel-1" class="dr-panel"></div>'
         '<div id="dr-panel-2" class="dr-panel dr-hidden"></div>'
@@ -5921,12 +5940,12 @@ def render_html(data):
     tab_tools = (
         '<div class="tab-pane" data-tab="tools">'
         '<div class="inner-tabs">'
-        '<button class="inner-tab-btn active" id="tstb-analytics" '
-        'onclick="switchToolsTab(\'analytics\')">📈 Analytics</button>'
-        '<button class="inner-tab-btn" id="tstb-seasonpace" '
-        'onclick="switchToolsTab(\'seasonpace\')">📊 Season Pace</button>'
-        '<button class="inner-tab-btn" id="tstb-trade" '
-        'onclick="switchToolsTab(\'trade\')">🔀 Trade</button>'
+        '<button type="button" class="inner-tab-btn active" id="tstb-analytics" '
+        'onclick="switchToolsTab(\'analytics\')">Analytics</button>'
+        '<button type="button" class="inner-tab-btn" id="tstb-seasonpace" '
+        'onclick="switchToolsTab(\'seasonpace\')">Season Pace</button>'
+        '<button type="button" class="inner-tab-btn" id="tstb-trade" '
+        'onclick="switchToolsTab(\'trade\')">Trade</button>'
         '</div>'
         '<div class="tools-pane visible" id="tspane-analytics">'
         + _pane_inner(tab_analytics)
@@ -5935,8 +5954,8 @@ def render_html(data):
         + _pane_inner(tab_seasonpace)
         + '</div>'
         '<div class="tools-pane" id="tspane-trade">'
-        '<div class="card mb20"><div id="tc-wrap">'
-        '<div style="padding:40px;text-align:center;color:var(--text2)">⏳ Loading Trade Calculator…</div>'
+        '<div class="card mb20"><div id="tc-wrap" aria-live="polite">'
+        f'<div class="tc-loading">{_state_loading("Loading Trade Calculator")}</div>'
         '</div></div>'
         '</div>'
         '</div>'
@@ -5948,21 +5967,35 @@ def render_html(data):
     # ── Season Simulation tab ────────────────────────────────────────────────
     tab_seasonsim = _season_sim_tab(data.get("season_sim", {}))
 
+    page_title = esc(data["title"])
+    meta_description = (
+        "Fantasy Daily Briefing for "
+        f"{MY_TEAM_NAME}: matchup context, roster health, waivers, tools, and model signals."
+    )
+    meta_description_safe = esc(meta_description)
+
     page = (
         "<!DOCTYPE html>\n"
         '<html lang="en" data-theme="dark">\n'
         "<head>\n"
         '  <meta charset="utf-8">\n'
         '  <meta name="viewport" content="width=device-width,initial-scale=1">\n'
-        f'  <title>{esc(data["title"])}</title>\n'
+        f'  <meta name="description" content="{meta_description_safe}">\n'
+        '  <meta name="theme-color" content="#0d1119">\n'
+        f'  <meta property="og:title" content="{page_title}">\n'
+        f'  <meta property="og:description" content="{meta_description_safe}">\n'
+        '  <meta property="og:type" content="website">\n'
+        f'  <title>{page_title}</title>\n'
+        '  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2212%22 fill=%22%230d1119%22/%3E%3Ccircle cx=%2232%22 cy=%2232%22 r=%2218%22 fill=%22none%22 stroke=%22%232563eb%22 stroke-width=%226%22/%3E%3Cpath d=%22M14 36h36%22 stroke=%22%23f0f4f8%22 stroke-width=%226%22 stroke-linecap=%22round%22/%3E%3C/svg%3E">\n'
         '  <link rel="preconnect" href="https://fonts.googleapis.com">\n'
         '  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n'
-        '  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=JetBrains+Mono:wght@600;700&family=Roboto:wght@300;400;500;700;900&family=Roboto+Condensed:wght@700;900&display=swap" rel="stylesheet">\n'
+        '  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Oswald:wght@500;600;700&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">\n'
         '  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>\n'
         f"  <style>{CSS}</style>\n"
         "</head>\n"
         "<body>\n"
-        '<div class="topbar">\n'
+        '<a class="skip-link" href="#main-content">Skip to content</a>\n'
+        '<header class="topbar" role="banner">\n'
         '  <div class="topbar-left">\n'
         '    <div class="logo"><div class="logo-dot"></div>FDB</div>\n'
         '    <div class="topbar-meta">\n'
@@ -5973,36 +6006,36 @@ def render_html(data):
         '  <div class="topbar-right">\n'
         '    <span class="chip-sm">VAR Model</span>\n'
         f'    <span class="chip-sm">{esc(data["ref_text"])}</span>\n'
-        '    <button class="theme-btn" onclick="toggleTheme()" title="Toggle theme">\n'
+        '    <button type="button" class="theme-btn" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">\n'
         '      <span id="theme-icon">&#9728;&#65039;</span>\n'
         '    </button>\n'
         '  </div>\n'
-        '</div>\n'
-        '<div class="tabs">\n'
-        '  <button class="tab-btn active" data-tab="today" onclick="switchTab(\'today\')">Today</button>\n'
-        '  <button class="tab-btn" data-tab="myteam" onclick="switchTab(\'myteam\')" id="tab-btn-myteam">My Team</button>\n'
-        '  <button class="tab-btn" data-tab="tools" onclick="switchTab(\'tools\')">Tools</button>\n'
+        '</header>\n'
+        '<nav class="tabs" aria-label="Primary briefing sections">\n'
+        '  <button type="button" class="tab-btn active" data-tab="today" onclick="switchTab(\'today\')">Today</button>\n'
+        '  <button type="button" class="tab-btn" data-tab="myteam" onclick="switchTab(\'myteam\')" id="tab-btn-myteam">My Team</button>\n'
+        '  <button type="button" class="tab-btn" data-tab="tools" onclick="switchTab(\'tools\')">Tools</button>\n'
         '  <div class="tab-more-wrap">\n'
-        '    <button class="tab-btn tab-more-btn" onclick="toggleMoreMenu()">&#8943; More</button>\n'
-        '    <div class="tab-more-menu" id="tab-more-menu">\n'
-        '      <button onclick="switchTab(\'howitworks\');toggleMoreMenu()">&#128214; How It Works</button>\n'
+        '    <button type="button" class="tab-btn tab-more-btn" id="tab-more-btn" onclick="toggleMoreMenu()" aria-haspopup="menu" aria-expanded="false" aria-controls="tab-more-menu">&#8943; More</button>\n'
+        '    <div class="tab-more-menu" id="tab-more-menu" role="menu" aria-label="More briefing sections">\n'
+        '      <button type="button" role="menuitem" onclick="switchTab(\'howitworks\');toggleMoreMenu()">How It Works</button>\n'
         '    </div>\n'
         '  </div>\n'
-        '</div>\n'
-        '<div class="wrap">\n'
+        '</nav>\n'
+        '<main class="wrap" id="main-content" tabindex="-1" role="main">\n'
         + tab_today      + "\n"
         + tab_myteam     + "\n"
         + tab_tools      + "\n"
         + tab_howitworks + "\n"
-        '  <div class="footer">Fantasy Daily Briefing &middot; Good luck this week, Rory.</div>\n'
-        "</div>\n"
+        '  <footer class="footer">Fantasy Daily Briefing &middot; Good luck this week, Rory.</footer>\n'
+        "</main>\n"
         f"<script>var FDB_YEAR={YEAR};\n"
         f"var FDB_ROSTER={roster_json};\n"
         f"var FDB_MATCHUP_PLAYERS={matchup_players_json};\n"
         f"{JS}</script>\n"
-        '<div id="player-modal" onclick="if(event.target===this)closePlayerModal()">\n'
+        '<div id="player-modal" role="dialog" aria-modal="true" aria-labelledby="pm-title" aria-label="Player details" onclick="if(event.target===this)closePlayerModal()">\n'
         '  <div class="pm-box">\n'
-        '    <button class="pm-close" onclick="closePlayerModal()">&#x2715;</button>\n'
+        '    <button type="button" class="pm-close" onclick="closePlayerModal()" aria-label="Close player details">&#x2715;</button>\n'
         '    <div id="pm-content"></div>\n'
         '  </div>\n'
         '</div>\n'

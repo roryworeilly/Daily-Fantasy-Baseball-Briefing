@@ -11,6 +11,7 @@
 ## Features
 
 - **Daily HTML Briefing** — A single self-contained HTML report delivered each morning covering your entire league situation.
+- **Polished Dashboard UI** — Semantic landmarks, keyboard-visible focus, accessible loading/error states, sticky navigation, and a consistent light/dark visual system.
 - **Lineup Lab** — Start/sit recommendations driven by projected points, matchup splits, and park factors.
 - **Waiver Wire Analysis** — Ranked free-agent targets with replacement-level context and league-wide availability.
 - **Statcast Signals** — Exit velocity, barrel%, sprint speed, xwOBA, and xERA breakout/regression flags keyed to MLBAM IDs.
@@ -95,7 +96,7 @@ FB/
 │       ├── __init__.py
 │       ├── run.py           # Pipeline orchestration
 │       ├── model.py         # Scoring model, cache loading, market context
-│       ├── html.py          # HTML report renderer
+│       ├── html.py          # HTML report renderer and semantic dashboard shell
 │       ├── settings.py      # Scoring rules, slots, thresholds, DB paths
 │       ├── simulate.py      # Monte-Carlo season simulation
 │       ├── assets.py        # Static asset embedding
@@ -107,8 +108,8 @@ FB/
 │   └── build_reference_cache.py     # Builds MLBAM player reference index
 │
 ├── res/                     # Static web assets bundled into the HTML report
-│   ├── briefing.css
-│   └── briefing.js
+│   ├── briefing.css         # Visual system, dashboard layout, state components
+│   └── briefing.js          # Tab state, modal behavior, dynamic tools
 │
 ├── scripts/                 # Developer and maintenance utilities
 │   ├── extract_ui_assets.py
@@ -199,6 +200,18 @@ python tools/build_reference_cache.py
 python tools/build_statcast_cache.py
 python tools/build_projection_cache.py
 ```
+
+### Validate briefing UI changes
+
+When editing `src/fdb/html.py`, `res/briefing.css`, or `res/briefing.js`, run:
+
+```bash
+python -m py_compile src/fdb/html.py
+node --check res/briefing.js
+python run_briefing.py
+```
+
+The generated preview is written to `output/Daily Briefing.html`; source files are the canonical edit targets.
 
 ### Scoring rules
 

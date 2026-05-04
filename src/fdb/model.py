@@ -2,14 +2,12 @@
 Machine-generated from fdbRV.py — see .build/generate_fdb_package.py.
 """
 import os
-import sys
 import math
 import json
-import re
 import html
 import time
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fdb.settings import (
     SCRIPT_DIR,
@@ -29,7 +27,6 @@ from fdb.settings import (
     batting_stats_bref, pitching_stats_bref,
     bwar_bat, bwar_pitch,
 )
-from espn_api.baseball.player import Player as ESPNPlayer
 from fdb.utils import normalize_name
 
 
@@ -40,35 +37,44 @@ def safe_get(obj, *attrs, default=None):
             return val
     return default
 
+
 def as_float(value, default=0.0):
     try:
         return float(value) if value not in (None, "") else default
     except Exception:
         return default
 
+
 def normalize_pos(pos):
     return str(pos).upper() if pos else "?"
+
 
 def get_player_slots(player):
     slots = safe_get(player, "eligibleSlots", default=[]) or []
     return [normalize_pos(s) for s in slots] if slots else ["?"]
 
+
 def get_lineup_slot(player):
     return normalize_pos(safe_get(player, "lineupSlot", default="?"))
+
 
 def get_player_status(player):
     return safe_get(player, "injuryStatus", default="ACTIVE") or "ACTIVE"
 
+
 def get_player_team(player):
     return safe_get(player, "proTeam", default="?")
 
+
 def is_pitcher(player):
     return bool(set(get_player_slots(player)) & {"SP", "RP", "P"})
+
 
 def is_hitter(player):
     return not is_pitcher(player)
 
 # ── Pitcher role detection (starter vs. reliever) ─────────────────────────────
+
 
 def _pitcher_gs_from_ref(player):
     """Return GS from last-season reference DB, or -1.0 if the player isn't found."""
@@ -76,6 +82,7 @@ def _pitcher_gs_from_ref(player):
     if not m:
         return -1.0
     return get_metric(m, "GS")   # 0.0 for confirmed pure relievers
+
 
 def is_starter_role(player):
     """
@@ -102,6 +109,7 @@ def is_starter_role(player):
     if gs >= 0:
         return gs >= 15
     return False
+
 
 def is_reliever_role(player):
     """
@@ -131,8 +139,10 @@ def is_reliever_role(player):
         return gs < 10
     return False
 
+
 def is_active_slot(slot):
     return slot not in {"BE", "BENCH", "IL", "IR", "NA"}
+
 
 def get_metric(row, *keys, default=0.0):
     for key in keys:
@@ -140,14 +150,17 @@ def get_metric(row, *keys, default=0.0):
             return as_float(row[key], default)
     return default
 
+
 def esc(v):
     return html.escape(str(v))
+
 
 def fmt(v, d=2):
     try:
         return f"{float(v):.{d}f}"
     except Exception:
         return str(v)
+
 
 def get_player_headshot_url(player):
     """ESPN CDN primary headshot — uses the espn-api player ID."""
@@ -159,6 +172,7 @@ def get_player_headshot_url(player):
         except Exception:
             pass
     return ""
+
 
 def get_player_headshot_url_mlb(player):
     """MLB Stats CDN secondary headshot — uses the MLBAM pro player ID."""
@@ -173,6 +187,7 @@ def get_player_headshot_url_mlb(player):
         except Exception:
             pass
     return ""
+
 
 # Populated by load_statcast_db() — normalized name → MLBAM ID str.
 # Declared here (before get_mlbam_id) so the function body can reference it.
@@ -209,6 +224,7 @@ def get_mlbam_id(player):
             return mlbam
     return ""
 
+
 def get_espn_id(player):
     """Return the ESPN player ID as a string, or '' if unavailable."""
     for attr in ("playerId", "player_id", "id"):
@@ -220,11 +236,13 @@ def get_espn_id(player):
             pass
     return ""
 
+
 def get_initials(name):
     parts = [p for p in str(name).split() if p]
     if not parts:
         return "?"
     return (parts[0][0] + parts[-1][0]).upper() if len(parts) > 1 else parts[0][:2].upper()
+
 
 def avatar_seed(name):
     return hashlib.md5(name.encode()).hexdigest()[:10]
@@ -233,6 +251,7 @@ def avatar_seed(name):
 # ══════════════════════════════════════════════════════════════════════════════
 # ESPN HELPERS
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def connect():
     league = League(league_id=LEAGUE_ID, year=YEAR, swid=SWID, espn_s2=ESPN_S2)
@@ -250,7 +269,6 @@ def _reload_rosters_today(league):
     Without this call, a player your manager benched today still shows as
     'active', and players added/moved this morning may show in stale slots.
     """
-    from espn_api.baseball.player import Player as ESPNPlayer
     try:
         period = getattr(league, "current_week", None) or getattr(league, "scoringPeriodId", None)
         if not period:
@@ -264,8 +282,8 @@ def _reload_rosters_today(league):
 
         fresh: dict[int, dict] = {}
         for td in data.get("teams", []):
-            tid     = td.get("id")
-            roster  = td.get("roster")
+            tid = td.get("id")
+            roster = td.get("roster")
             if tid is not None and roster:
                 fresh[tid] = roster
 
@@ -285,6 +303,7 @@ def get_my_team(league):
         if MY_TEAM_NAME.lower() in team.team_name.lower():
             return team
     return None
+
 
 def get_matchup(league, my_team):
     """Return (matchup, my_team_obj, opponent_team_obj) or (None, None, None)."""
@@ -318,19 +337,19 @@ def get_matchup_scoring_breakdown(league, my_team):
     if not matchup:
         return [], []
 
-    is_home    = (me.team_name == getattr(matchup.home_team, "team_name", None))
-    my_lineup  = getattr(matchup, "home_lineup"  if is_home else "away_lineup",  [])
-    opp_lineup = getattr(matchup, "away_lineup"  if is_home else "home_lineup",  [])
+    is_home = (me.team_name == getattr(matchup.home_team, "team_name", None))
+    my_lineup = getattr(matchup, "home_lineup" if is_home else "away_lineup",  [])
+    opp_lineup = getattr(matchup, "away_lineup" if is_home else "home_lineup",  [])
 
     def _extract(lineup):
         rows = []
         for bp in lineup:
-            slot      = getattr(bp, "slot_position", "") or ""
-            pts       = as_float(getattr(bp, "points",            0))
-            proj      = as_float(getattr(bp, "projected_points",  0))
+            slot = getattr(bp, "slot_position", "") or ""
+            pts = as_float(getattr(bp, "points",            0))
+            proj = as_float(getattr(bp, "projected_points",  0))
             breakdown = getattr(bp, "points_breakdown", {}) or {}
             # Keep only non-zero point contributions, rounded to 1 dp
-            bd_clean  = {
+            bd_clean = {
                 k: round(float(v), 1)
                 for k, v in breakdown.items()
                 if v and float(v) != 0
@@ -378,24 +397,26 @@ def get_recent_activity(league, size=40):
                 continue
 
             # ── Separate trade actions from add/drop actions ───────────────
-            trade_actions  = []   # (team_name, player_name) — team GAVE player away
+            trade_actions = []   # (team_name, player_name) — team GAVE player away
             pickup_actions = []   # (team_name, move_type_lower, player_name)
 
             for action in actions:
                 if len(action) < 3:
                     continue
                 team_obj, move_type_raw, player_obj = action[0], action[1], action[2]
-                tname  = getattr(team_obj,   "team_name", "?")
-                pname  = getattr(player_obj, "name",      str(player_obj))
-                mtype  = str(move_type_raw).lower()
+                tname = getattr(team_obj,   "team_name", "?")
+                pname = getattr(player_obj, "name",      str(player_obj))
+                mtype = str(move_type_raw).lower()
 
                 if mtype == "traded":
                     trade_actions.append((tname, pname))
                 else:
                     pickup_actions.append((tname, mtype, pname))
                     norm = normalize_name(pname)
-                    if "add"  in mtype: adds[norm]  = adds.get(norm,  0) + 1
-                    if "drop" in mtype: drops[norm] = drops.get(norm, 0) + 1
+                    if "add" in mtype:
+                        adds[norm] = adds.get(norm, 0) + 1
+                    if "drop" in mtype:
+                        drops[norm] = drops.get(norm, 0) + 1
 
             # ── Emit trade as a single consolidated entry ──────────────────
             if trade_actions:
@@ -461,6 +482,7 @@ def get_recent_activity(league, size=40):
 # PYBASEBALL REFERENCE LAYER
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def _compact(v, ndigits=4):
     """Round a float for compact cache storage; returns 0.0 for non-numeric."""
     try:
@@ -490,9 +512,9 @@ def _load_reference_from_fangraphs(season):
         name = normalize_name(row.get("Name", ""))
         if not name:
             continue
-        h  = get_metric(row, "H")
-        d  = get_metric(row, "2B")
-        t  = get_metric(row, "3B")
+        h = get_metric(row, "H")
+        d = get_metric(row, "2B")
+        t = get_metric(row, "3B")
         hr = get_metric(row, "HR")
         hitters[name] = {
             "display_name": row.get("Name", ""),
@@ -521,7 +543,7 @@ def _load_reference_from_fangraphs(season):
             "GBp":   _compact(get_metric(row, "GB%")),     # ground-ball rate
             "FBp":   _compact(get_metric(row, "FB%")),     # fly-ball rate
             "Hardp": _compact(get_metric(row, "Hard%")),   # hard-hit rate (FG definition)
-            "Brlp":  _compact(get_metric(row, "Barrel%")), # barrel rate (Statcast-via-FG)
+            "Brlp":  _compact(get_metric(row, "Barrel%")),  # barrel rate (Statcast-via-FG)
             "Spd":   _compact(get_metric(row, "Spd")),     # speed score
         }
 
@@ -530,9 +552,9 @@ def _load_reference_from_fangraphs(season):
         name = normalize_name(row.get("Name", ""))
         if not name:
             continue
-        era  = get_metric(row, "ERA")
+        era = get_metric(row, "ERA")
         whip = get_metric(row, "WHIP")
-        fip  = get_metric(row, "FIP")
+        fip = get_metric(row, "FIP")
         xfip = get_metric(row, "xFIP")
         pitchers[name] = {
             "display_name": row.get("Name", ""),
@@ -550,12 +572,12 @@ def _load_reference_from_fangraphs(season):
             "BS":   _compact(get_metric(row, "BS"),      1),
             "QS":   _compact(get_metric(row, "QS"),      1),
             "GS":   _compact(get_metric(row, "GS"),      1),
-            "ERA":  _compact(era  if era  > 0 else 99.0),
+            "ERA":  _compact(era if era > 0 else 99.0),
             "WHIP": _compact(whip if whip > 0 else 9.9),
             "WAR":  _compact(get_metric(row, "WAR")),
             # ── Phase 1: FanGraphs advanced ERA estimators ────────────────────
-            "FIP":   _compact(fip  if fip  > 0 else 0.0),  # fielding-independent ERA
-            "xFIP":  _compact(xfip if xfip > 0 else 0.0), # xFIP (normalizes HR/FB)
+            "FIP":   _compact(fip if fip > 0 else 0.0),  # fielding-independent ERA
+            "xFIP":  _compact(xfip if xfip > 0 else 0.0),  # xFIP (normalizes HR/FB)
             "SIERA": _compact(get_metric(row, "SIERA")),   # best ERA predictor
             # Stuff / swing metrics
             "SwStp": _compact(get_metric(row, "SwStr%")),  # swinging-strike rate
@@ -571,21 +593,21 @@ def _load_reference_from_fangraphs(season):
             # Regression signals
             "HRFBp": _compact(get_metric(row, "HR/FB")),   # HR/fly-ball (mean-reverts ~10%)
             "LOBp":  _compact(get_metric(row, "LOB%")),    # strand rate (mean-reverts ~72%)
-            "BABIPp":_compact(get_metric(row, "BABIP")),   # BABIP allowed
+            "BABIPp": _compact(get_metric(row, "BABIP")),   # BABIP allowed
         }
 
     return hitters, pitchers
 
 
 def _load_reference_from_pybaseball(season):
-    hitters_df  = batting_stats_bref(season)
+    hitters_df = batting_stats_bref(season)
     pitchers_df = pitching_stats_bref(season)
-    h_war_df    = bwar_bat()
-    p_war_df    = bwar_pitch()
-    h_war_df    = h_war_df[h_war_df["year_ID"] == season]
-    p_war_df    = p_war_df[p_war_df["year_ID"] == season]
+    h_war_df = bwar_bat()
+    p_war_df = bwar_pitch()
+    h_war_df = h_war_df[h_war_df["year_ID"] == season]
+    p_war_df = p_war_df[p_war_df["year_ID"] == season]
 
-    hitters  = {}
+    hitters = {}
     pitchers = {}
 
     for row in hitters_df.to_dict(orient="records"):
@@ -604,18 +626,18 @@ def _load_reference_from_pybaseball(season):
             "BABIP": 0.0, "LDp": 0.0, "GBp": 0.0, "FBp": 0.0,
             "Hardp": 0.0, "Brlp": 0.0, "Spd": 0.0,
         })
-        e["PA"]  += get_metric(row, "PA")
-        e["H"]   += get_metric(row, "H")
-        e["2B"]  += get_metric(row, "2B")
-        e["3B"]  += get_metric(row, "3B")
-        e["HR"]  += get_metric(row, "HR")
-        e["R"]   += get_metric(row, "R")
+        e["PA"] += get_metric(row, "PA")
+        e["H"] += get_metric(row, "H")
+        e["2B"] += get_metric(row, "2B")
+        e["3B"] += get_metric(row, "3B")
+        e["HR"] += get_metric(row, "HR")
+        e["R"] += get_metric(row, "R")
         e["RBI"] += get_metric(row, "RBI")
-        e["SB"]  += get_metric(row, "SB")
-        e["BB"]  += get_metric(row, "BB")
-        e["SO"]  += get_metric(row, "SO", "K")
-        e["TB"]  += get_metric(row, "TB")
-        e["OPS"]  = max(e["OPS"], get_metric(row, "OPS"))
+        e["SB"] += get_metric(row, "SB")
+        e["BB"] += get_metric(row, "BB")
+        e["SO"] += get_metric(row, "SO", "K")
+        e["TB"] += get_metric(row, "TB")
+        e["OPS"] = max(e["OPS"], get_metric(row, "OPS"))
 
     for row in h_war_df.to_dict(orient="records"):
         name = normalize_name(row.get("name_common", ""))
@@ -640,22 +662,24 @@ def _load_reference_from_pybaseball(season):
             "GBp": 0.0, "FBp": 0.0, "LDp": 0.0,
             "HRFBp": 0.0, "LOBp": 0.0, "BABIPp": 0.0,
         })
-        e["IP"]  += get_metric(row, "IP")
-        e["H"]   += get_metric(row, "H")
-        e["ER"]  += get_metric(row, "ER")
-        e["HR"]  += get_metric(row, "HR")
-        e["BB"]  += get_metric(row, "BB")
-        e["SO"]  += get_metric(row, "SO", "K")
-        e["W"]   += get_metric(row, "W")
-        e["L"]   += get_metric(row, "L")
-        e["SV"]  += get_metric(row, "SV")
-        e["HD"]  += get_metric(row, "HLD", "HD")
-        e["QS"]  += get_metric(row, "QS")
-        e["GS"]  += get_metric(row, "GS")
-        era  = get_metric(row, "ERA")
+        e["IP"] += get_metric(row, "IP")
+        e["H"] += get_metric(row, "H")
+        e["ER"] += get_metric(row, "ER")
+        e["HR"] += get_metric(row, "HR")
+        e["BB"] += get_metric(row, "BB")
+        e["SO"] += get_metric(row, "SO", "K")
+        e["W"] += get_metric(row, "W")
+        e["L"] += get_metric(row, "L")
+        e["SV"] += get_metric(row, "SV")
+        e["HD"] += get_metric(row, "HLD", "HD")
+        e["QS"] += get_metric(row, "QS")
+        e["GS"] += get_metric(row, "GS")
+        era = get_metric(row, "ERA")
         whip = get_metric(row, "WHIP")
-        if era  > 0: e["ERA"]  = min(e["ERA"],  era)
-        if whip > 0: e["WHIP"] = min(e["WHIP"], whip)
+        if era > 0:
+            e["ERA"] = min(e["ERA"], era)
+        if whip > 0:
+            e["WHIP"] = min(e["WHIP"], whip)
 
     for row in p_war_df.to_dict(orient="records"):
         name = normalize_name(row.get("name_common", ""))
@@ -663,6 +687,7 @@ def _load_reference_from_pybaseball(season):
             pitchers[name]["WAR"] += get_metric(row, "WAR")
 
     return hitters, pitchers
+
 
 def load_reference_db():
     """
@@ -811,8 +836,8 @@ def load_projection_db():
         nh, np_ = len(data.get("hitters", {})), len(data.get("pitchers", {}))
         src = data.get("sources", {})
         print(f"  Projection DB: loaded {nh} hitters, {np_} pitchers ({age_h:.0f}h old) "
-              f"[Steamer {src.get('steamer_bat',0)}/{src.get('steamer_pit',0)} · "
-              f"ZiPS {src.get('zips_bat',0)}/{src.get('zips_pit',0)}]")
+              f"[Steamer {src.get('steamer_bat', 0)}/{src.get('steamer_pit', 0)} · "
+              f"ZiPS {src.get('zips_bat', 0)}/{src.get('zips_pit', 0)}]")
     except Exception as e:
         print(f"  Projection DB: load failed ({e})")
 
@@ -826,14 +851,14 @@ def get_projection_metrics(player) -> dict:
     if not PROJECTION_DB["loaded"]:
         return {}
     name = normalize_name(getattr(player, "name", ""))
-    db   = PROJECTION_DB["pitchers"] if is_pitcher(player) else PROJECTION_DB["hitters"]
+    db = PROJECTION_DB["pitchers"] if is_pitcher(player) else PROJECTION_DB["hitters"]
     return db.get(name, {})
 
 
 def get_reference_metrics(player):
     """Return the FanGraphs reference row for a player (Phase 1 advanced metrics included)."""
     name = normalize_name(getattr(player, "name", ""))
-    db   = REFERENCE_DB["pitchers"] if is_pitcher(player) else REFERENCE_DB["hitters"]
+    db = REFERENCE_DB["pitchers"] if is_pitcher(player) else REFERENCE_DB["hitters"]
     return db.get(name, {})
 
 
@@ -872,8 +897,8 @@ _CURRENT_SEASON_DB: dict = {
     "pitchers":  {},
     "loaded":    False,
 }
-_CURRENT_SEASON_MIN_PA  = 30   # minimum PA before including a hitter's 2026 stats
-_CURRENT_SEASON_MIN_IP  = 10   # minimum IP before including a pitcher's 2026 stats
+_CURRENT_SEASON_MIN_PA = 30   # minimum PA before including a hitter's 2026 stats
+_CURRENT_SEASON_MIN_IP = 10   # minimum IP before including a pitcher's 2026 stats
 
 # ── Actual FP cache — keyed by normalized player name ─────────────────────────
 # Persisted to fp_actual_cache.json with a 30-minute TTL so values survive
@@ -954,9 +979,9 @@ def load_current_season_db():
         pa = as_float(row.get("PA") or row.get("plateAppearances") or 0)
         if pa < _CURRENT_SEASON_MIN_PA:
             return None
-        h  = as_float(row.get("H") or row.get("hits") or 0)
-        d  = as_float(row.get("2B") or row.get("doubles") or 0)
-        t  = as_float(row.get("3B") or row.get("triples") or 0)
+        h = as_float(row.get("H") or row.get("hits") or 0)
+        d = as_float(row.get("2B") or row.get("doubles") or 0)
+        t = as_float(row.get("3B") or row.get("triples") or 0)
         hr = as_float(row.get("HR") or row.get("homeRuns") or 0)
         return {
             "name":  name,
@@ -995,9 +1020,9 @@ def load_current_season_db():
         ip = as_float(row.get("IP") or row.get("inningsPitched") or 0)
         if ip < _CURRENT_SEASON_MIN_IP:
             return None
-        era  = as_float(row.get("ERA") or row.get("era") or 0)
+        era = as_float(row.get("ERA") or row.get("era") or 0)
         whip = as_float(row.get("WHIP") or row.get("whip") or 0)
-        fip  = as_float(row.get("FIP") or 0)
+        fip = as_float(row.get("FIP") or 0)
         return {
             "name": name,
             "IP":    _compact(ip, 1),
@@ -1036,7 +1061,8 @@ def load_current_season_db():
         Fetches type=8 (standard/dashboard) which includes counting stats + key rates.
         """
         try:
-            import requests as _req, certifi as _cert
+            import certifi as _cert
+            import requests as _req
         except ImportError:
             raise RuntimeError("requests/certifi not installed")
 
@@ -1046,9 +1072,9 @@ def load_current_season_db():
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/124.0.0.0 Safari/537.36"
             ),
-            "Accept":          "application/json, text/plain, */*",
+            "Accept": "application/json, text/plain, */*",
             "Accept-Language": "en-US,en;q=0.9",
-            "Referer":         "https://www.fangraphs.com/leaders.aspx",
+            "Referer": "https://www.fangraphs.com/leaders.aspx",
         }
 
         merged: dict[str, dict] = {}  # name → merged row across stat types
@@ -1065,10 +1091,14 @@ def load_current_season_db():
                 f"&players=0&type={fg_type}&postseason=&sortdir=default&sortstat=WAR"
             )
             try:
-                resp = _req.get(url, headers=_FG_HEADERS, timeout=20,
-                                verify=_cert.where())
+                resp = _req.get(
+                    url,
+                    headers=_FG_HEADERS,
+                    timeout=20,
+                    verify=_cert.where(),
+                )
                 resp.raise_for_status()
-                ct  = resp.headers.get("Content-Type", "")
+                ct = resp.headers.get("Content-Type", "")
                 raw = resp.text.strip()
                 if raw.startswith("<!") or "text/html" in ct:
                     print(f"  FG direct [{stats_type}/type={fg_type}]: received HTML — skipping")
@@ -1082,7 +1112,7 @@ def load_current_season_db():
                     nm = row.get("Name") or row.get("PlayerName") or ""
                     if nm:
                         existing = merged.get(nm, {})
-                        existing.update(row)   # later type overwrites only new keys
+                        existing.update(row)  # later type overwrites only new keys
                         merged[nm] = existing
                 print(f"  FG direct [{stats_type}/type={fg_type}]: {len(rows)} players")
             except Exception as _e:
@@ -1109,7 +1139,8 @@ def load_current_season_db():
         Fetch current-season counting stats from the free MLB Stats API.
         stats_type: 'bat' (hitting) | 'pit' (pitching)
         """
-        import requests as _req, certifi as _cert
+        import certifi as _cert
+        import requests as _req
         group = "hitting" if stats_type == "bat" else "pitching"
         url = (
             f"https://statsapi.mlb.com/api/v1/stats"
@@ -1125,7 +1156,7 @@ def load_current_season_db():
         for stat_block in data.get("stats", []):
             for split in stat_block.get("splits", []):
                 player_info = split.get("player", {})
-                stat        = split.get("stat", {})
+                stat = split.get("stat", {})
                 stat["fullName"] = player_info.get("fullName", "")
                 rows.append(stat)
         print(f"  MLB Stats API [{group}]: {len(rows)} players")
@@ -1217,7 +1248,7 @@ def get_current_season_metrics(player) -> dict:
     if not _CURRENT_SEASON_DB.get("loaded"):
         return {}
     name = normalize_name(getattr(player, "name", ""))
-    db   = _CURRENT_SEASON_DB["pitchers"] if is_pitcher(player) else _CURRENT_SEASON_DB["hitters"]
+    db = _CURRENT_SEASON_DB["pitchers"] if is_pitcher(player) else _CURRENT_SEASON_DB["hitters"]
     return db.get(name, {})
 
 
@@ -1254,19 +1285,21 @@ def get_inseason_blend_weight() -> float:
 # PROJECTED FANTASY POINTS
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def _hitter_pts_from_stats(m):
-    score  = BATTING_SCORING["R"]   * get_metric(m, "R")
-    score += BATTING_SCORING["HR"]  * get_metric(m, "HR")
-    score += BATTING_SCORING["TB"]  * get_metric(m, "TB")
+    score = BATTING_SCORING["R"] * get_metric(m, "R")
+    score += BATTING_SCORING["HR"] * get_metric(m, "HR")
+    score += BATTING_SCORING["TB"] * get_metric(m, "TB")
     score += BATTING_SCORING["RBI"] * get_metric(m, "RBI")
-    score += BATTING_SCORING["BB"]  * get_metric(m, "BB")
-    score += BATTING_SCORING["SB"]  * get_metric(m, "SB")
-    score += BATTING_SCORING["K"]   * get_metric(m, "SO", "K")
+    score += BATTING_SCORING["BB"] * get_metric(m, "BB")
+    score += BATTING_SCORING["SB"] * get_metric(m, "SB")
+    score += BATTING_SCORING["K"] * get_metric(m, "SO", "K")
     rbi = get_metric(m, "RBI")
-    pa  = get_metric(m, "PA")
+    pa = get_metric(m, "PA")
     score += BATTING_SCORING["GWRBI"] * (rbi * 0.02)
-    score += BATTING_SCORING["GSHR"]  * (pa  * 0.003)
+    score += BATTING_SCORING["GSHR"] * (pa * 0.003)
     return score
+
 
 def _pitcher_pts_from_stats(m):
     sv = get_metric(m, "SV")
@@ -1275,22 +1308,23 @@ def _pitcher_pts_from_stats(m):
     ip = get_metric(m, "IP")
     so = get_metric(m, "SO", "K")
     qs = get_metric(m, "QS") if get_metric(m, "QS") > 0 else gs * 0.55
-    score  = PITCHING_SCORING["IP"]  * ip
-    score += PITCHING_SCORING["H"]   * get_metric(m, "H")
-    score += PITCHING_SCORING["ER"]  * get_metric(m, "ER")
-    score += PITCHING_SCORING["HR"]  * get_metric(m, "HR")
-    score += PITCHING_SCORING["BB"]  * get_metric(m, "BB")
-    score += PITCHING_SCORING["K"]   * so
-    score += PITCHING_SCORING["QS"]  * qs
-    score += PITCHING_SCORING["W"]   * get_metric(m, "W")
-    score += PITCHING_SCORING["L"]   * get_metric(m, "L")
-    score += PITCHING_SCORING["SV"]  * sv
-    score += PITCHING_SCORING["BS"]  * get_metric(m, "BS")
-    score += PITCHING_SCORING["HD"]  * hd
+    score = PITCHING_SCORING["IP"] * ip
+    score += PITCHING_SCORING["H"] * get_metric(m, "H")
+    score += PITCHING_SCORING["ER"] * get_metric(m, "ER")
+    score += PITCHING_SCORING["HR"] * get_metric(m, "HR")
+    score += PITCHING_SCORING["BB"] * get_metric(m, "BB")
+    score += PITCHING_SCORING["K"] * so
+    score += PITCHING_SCORING["QS"] * qs
+    score += PITCHING_SCORING["W"] * get_metric(m, "W")
+    score += PITCHING_SCORING["L"] * get_metric(m, "L")
+    score += PITCHING_SCORING["SV"] * sv
+    score += PITCHING_SCORING["BS"] * get_metric(m, "BS")
+    score += PITCHING_SCORING["HD"] * hd
     score += PITCHING_SCORING["SVHD"] * (sv + hd)
     score += PITCHING_SCORING["CG"] * (gs * 0.01)
     score += PITCHING_SCORING["SO"] * (gs * 0.001)
     return score
+
 
 def _apply_regression_corrections(player, pts: float) -> float:
     """
@@ -1314,7 +1348,7 @@ def _apply_regression_corrections(player, pts: float) -> float:
         return pts
 
     ref = get_reference_metrics(player)
-    sc  = get_statcast_metrics(player)
+    sc = get_statcast_metrics(player)
     multiplier = 1.0
 
     if is_pitcher(player):
@@ -1322,7 +1356,7 @@ def _apply_regression_corrections(player, pts: float) -> float:
         # LOB% mean-reverts to ~72-73%.  Extreme values signal pending ERA change.
         if ref:
             lob = get_metric(ref, "LOBp")   # stored as decimal, e.g. 0.78
-            hrfb = get_metric(ref, "HRFBp") # HR/FB rate, e.g. 0.10
+            hrfb = get_metric(ref, "HRFBp")  # HR/FB rate, e.g. 0.10
             if lob > 0:
                 lob_pct = lob * 100 if lob < 1 else lob
                 if lob_pct > 80:
@@ -1375,7 +1409,7 @@ def _apply_regression_corrections(player, pts: float) -> float:
         # ── Hitter xwOBA gap correction ──────────────────────────────────────
         if sc:
             xwoba_gap = sc.get("xwOBA_gap", 0.0)  # positive = xwOBA > wOBA (buy)
-            xwoba     = sc.get("xwOBA", 0.0)
+            xwoba = sc.get("xwOBA", 0.0)
             if xwoba > 0:
                 if xwoba_gap >= 0.060:
                     multiplier *= 1.08    # strong buy-low: true talent >> results
@@ -1390,6 +1424,7 @@ def _apply_regression_corrections(player, pts: float) -> float:
     multiplier = max(0.82, min(1.18, multiplier))
     return pts * multiplier
 
+
 def get_projected_pts(player):
     """
     Season-total projected fantasy points for a player.
@@ -1403,9 +1438,9 @@ def get_projected_pts(player):
 
     All paths apply _apply_regression_corrections() for BABIP/xwOBA/LOB%/HR-FB% adjustment.
     """
-    espn_proj    = as_float(safe_get(player, "projected_total_points", default=0))
-    proj_m       = get_projection_metrics(player)
-    steamer_pts  = as_float(proj_m.get("consensus_pts", 0)) if proj_m else 0.0
+    espn_proj = as_float(safe_get(player, "projected_total_points", default=0))
+    proj_m = get_projection_metrics(player)
+    steamer_pts = as_float(proj_m.get("consensus_pts", 0)) if proj_m else 0.0
 
     # ── Live 2026 in-season data (Phase 7) ───────────────────────────────────
     cs = get_current_season_metrics(player)
@@ -1483,9 +1518,9 @@ def get_weekly_projected_pts(player) -> float:
         (0.30× no starts, 1.0× one start, 1.75× two starts).
       - Relievers and hitters use a multiplier of 1.0.
     """
-    slot   = get_lineup_slot(player)
+    slot = get_lineup_slot(player)
     status = get_player_status(player)
-    on_il  = slot in ("IL", "IR") or status not in ("ACTIVE", "NORMAL", "")
+    on_il = slot in ("IL", "IR") or status not in ("ACTIVE", "NORMAL", "")
     if on_il:
         return 0.0  # unavailable this week; don't project any contribution
 
@@ -1505,6 +1540,7 @@ def get_weekly_projected_pts(player) -> float:
 # MARKET CONTEXT  —  replacement levels + pool depth
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def build_market_context(league):
     all_players = {p.name: p for t in league.teams for p in t.roster}
     try:
@@ -1515,7 +1551,7 @@ def build_market_context(league):
 
     by_pos = {}
     for player in all_players.values():
-        pts  = get_projected_pts(player)
+        pts = get_projected_pts(player)
         for pos in set(get_player_slots(player)):
             if pos in ("BE", "BENCH", "IL", "IR", "NA", "UTIL", "?"):
                 continue
@@ -1523,9 +1559,9 @@ def build_market_context(league):
 
     for pos, pts_list in by_pos.items():
         pts_list.sort(reverse=True)
-        n      = SLOTS_PER_TEAM.get(pos, N_TEAMS + 1) * N_TEAMS
-        lo     = n
-        hi     = min(n + REPLACEMENT_BUFFER, len(pts_list))
+        n = SLOTS_PER_TEAM.get(pos, N_TEAMS + 1) * N_TEAMS
+        lo = n
+        hi = min(n + REPLACEMENT_BUFFER, len(pts_list))
         if hi > lo:
             tier = pts_list[lo:hi]
             repl = sum(tier) / len(tier)
@@ -1555,7 +1591,7 @@ def build_market_context(league):
 
     def _repl_for(pts_list, slots_per_team):
         pts_list = sorted(pts_list, reverse=True)
-        n  = slots_per_team * N_TEAMS
+        n = slots_per_team * N_TEAMS
         lo = n
         hi = min(n + REPLACEMENT_BUFFER, len(pts_list))
         if hi > lo:
@@ -1625,18 +1661,19 @@ def get_replacement_level(player):
     fb = MARKET.get("fallback_repl", 0.0)
     return fb if fb > 0 else 0.0
 
+
 def get_scarcity_multiplier(player):
     best = 0.0
     proj = get_projected_pts(player)
     for pos in get_player_slots(player):
         if pos in ("BE", "BENCH", "IL", "IR", "NA", "UTIL", "?"):
             continue
-        repl  = MARKET["replacement_levels"].get(pos, 0)
+        repl = MARKET["replacement_levels"].get(pos, 0)
         if proj <= repl:
             continue
         depth = MARKET["pool_above_repl"].get(pos, 50)
-        mult  = 1.0 + (1.0 / math.sqrt(depth + 1))
-        best  = max(best, mult)
+        mult = 1.0 + (1.0 / math.sqrt(depth + 1))
+        best = max(best, mult)
 
     # ── Hold-scarcity bonus ───────────────────────────────────────────────────
     # Elite setup men (HD ≥ 15 prior season) are rare but conventionally
@@ -1667,9 +1704,10 @@ def get_scarcity_multiplier(player):
 # CORE VALUE MODEL
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def calculate_base_score_raw(player):
-    status  = get_player_status(player)
-    slot    = get_lineup_slot(player)
+    status = get_player_status(player)
+    slot = get_lineup_slot(player)
 
     # Treat as injured/IL if EITHER the lineup slot is IL/IR (player was placed on IL
     # by their manager even if ESPN injuryStatus is blank) OR the injury status is
@@ -1689,9 +1727,9 @@ def calculate_base_score_raw(player):
         ).lower()
         _SEVERE_KW = ("tommy john", "ucl", "labrum", "acl", "mcl", "surgery",
                       "season-ending", "season ending", "60-day", "tjs")
-        _LONG_KW   = ("elbow", "shoulder", "knee", "back", "oblique", "60 day")
+        _LONG_KW = ("elbow", "shoulder", "knee", "back", "oblique", "60 day")
         _is_severe = any(kw in _inj_note for kw in _SEVERE_KW)
-        _is_long   = any(kw in _inj_note for kw in _LONG_KW)
+        _is_long = any(kw in _inj_note for kw in _LONG_KW)
 
         if _is_severe:
             injury_factor = 0.15   # essentially out for season
@@ -1729,12 +1767,11 @@ def calculate_base_score_raw(player):
     pitcher_quality_mult = 1.0
     if is_pitcher(player) and var > 0:
         ref = get_reference_metrics(player)
-        sc  = get_statcast_metrics(player)
         if is_starter_role(player) and ref:
             siera = get_metric(ref, "SIERA", "FIP")
             swstr = get_metric(ref, "SwStr%", "SwStrp") * (100 if get_metric(ref, "SwStrp") < 1 else 1)
-            ip    = get_metric(ref, "IP")
-            k_bb  = get_metric(ref, "KBBp", "K-BB%")
+            ip = get_metric(ref, "IP")
+            k_bb = get_metric(ref, "KBBp", "K-BB%")
             if siera > 0 and siera < 3.5:
                 pitcher_quality_mult += 0.12   # elite: durability premium (IP×3 is huge)
             elif siera > 0 and siera < 4.0:
@@ -1746,8 +1783,8 @@ def calculate_base_score_raw(player):
             if k_bb >= 18:
                 pitcher_quality_mult += 0.04   # K-BB% excellence
         elif is_reliever_role(player) and ref:
-            sv  = get_metric(ref, "SV")
-            hd  = get_metric(ref, "HD", "HLD")
+            sv = get_metric(ref, "SV")
+            hd = get_metric(ref, "HD", "HLD")
             era = get_metric(ref, "ERA")
             if sv >= 25:
                 pitcher_quality_mult += 0.14   # locked-in closer (SV×6 + SVHD×2 = 8 pts each)
@@ -1775,7 +1812,7 @@ def calculate_fit_score_raw(player, team):
     _SKIP_SLOTS = {"BE", "BENCH", "IL", "IR", "NA", "UTIL", "?"}
     roster_pts_by_pos: dict = {}
     for p in team.roster:
-        slot   = get_lineup_slot(p)
+        slot = get_lineup_slot(p)
         status = get_player_status(p)
         # Skip truly unavailable players (IL/IR or non-ACTIVE injury status)
         if slot in ("IL", "IR") or status not in ("ACTIVE", "NORMAL", ""):
@@ -1786,7 +1823,7 @@ def calculate_fit_score_raw(player, team):
                 roster_pts_by_pos.setdefault(eligible_pos, []).append(pp)
 
     upgrade = 0.0
-    slots   = get_player_slots(player)
+    slots = get_player_slots(player)
 
     for pos in slots:
         if pos in _SKIP_SLOTS:
@@ -1855,7 +1892,7 @@ def calculate_fit_score_raw(player, team):
         if pos in _SKIP_SLOTS:
             continue
         expected = SLOTS_PER_TEAM.get(pos, 1)
-        actual   = rostered_pos.get(pos, 0)
+        actual = rostered_pos.get(pos, 0)
         if actual < expected:
             deficit = (expected - actual) / expected
             need_multiplier = max(need_multiplier, deficit * 0.12)
@@ -1873,7 +1910,7 @@ def build_score_scaling(league):
         pass
 
     pitchers = [p for p in all_players.values() if is_pitcher(p)]
-    hitters  = [p for p in all_players.values() if is_hitter(p)]
+    hitters = [p for p in all_players.values() if is_hitter(p)]
 
     p_base = sorted(calculate_base_score_raw(p) for p in pitchers)
     h_base = sorted(calculate_base_score_raw(p) for p in hitters)
@@ -1892,8 +1929,8 @@ def build_score_scaling(league):
 
     SCALING["p_base_min"], SCALING["p_base_max"] = percentile_bounds(p_base)
     SCALING["h_base_min"], SCALING["h_base_max"] = percentile_bounds(h_base)
-    SCALING["p_fit_min"],  SCALING["p_fit_max"]  = percentile_bounds(p_fit) if p_fit else (0.0, 1.0)
-    SCALING["h_fit_min"],  SCALING["h_fit_max"]  = percentile_bounds(h_fit) if h_fit else (0.0, 1.0)
+    SCALING["p_fit_min"],  SCALING["p_fit_max"] = percentile_bounds(p_fit) if p_fit else (0.0, 1.0)
+    SCALING["h_fit_min"],  SCALING["h_fit_max"] = percentile_bounds(h_fit) if h_fit else (0.0, 1.0)
 
     # Legacy unified scale
     all_base = sorted(p_base + h_base)
@@ -1909,6 +1946,7 @@ def _scale(value, vmin, vmax):
         return 50.0
     return max(0.0, min(100.0, 100.0 * (value - vmin) / (vmax - vmin)))
 
+
 def base_score(player):
     raw = calculate_base_score_raw(player)
     if not SCALING["ready"]:
@@ -1916,6 +1954,7 @@ def base_score(player):
     if is_pitcher(player):
         return _scale(raw, SCALING["p_base_min"], SCALING["p_base_max"])
     return _scale(raw, SCALING["h_base_min"], SCALING["h_base_max"])
+
 
 def fit_score(player, team):
     raw = calculate_fit_score_raw(player, team)
@@ -1925,18 +1964,24 @@ def fit_score(player, team):
         return _scale(raw, SCALING["p_fit_min"], SCALING["p_fit_max"])
     return _scale(raw, SCALING["h_fit_min"], SCALING["h_fit_max"])
 
+
 def get_value_tier(score):
     """5-level tier label based on family-relative 0-100 score."""
-    if score >= 90:  return "Elite"
-    if score >= 65:  return "Starter"
-    if score >= 40:  return "Depth"
-    if score >= 20:  return "Replacement"
+    if score >= 90:
+        return "Elite"
+    if score >= 65:
+        return "Starter"
+    if score >= 40:
+        return "Depth"
+    if score >= 20:
+        return "Replacement"
     return "Droppable"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # WAIVER INTELLIGENCE
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def _suggest_drop(my_team, pickup):
     """
@@ -1949,7 +1994,7 @@ def _suggest_drop(my_team, pickup):
 
     Also returns a warning string if dropping creates a blueprint gap.
     """
-    family      = "P" if is_pitcher(pickup) else "H"
+    family = "P" if is_pitcher(pickup) else "H"
     same_family = [
         p for p in my_team.roster
         if (is_pitcher(p) if family == "P" else is_hitter(p))
@@ -1968,12 +2013,12 @@ def _suggest_drop(my_team, pickup):
         return len(roster_at_pos) == 0
 
     def drop_priority(p):
-        slot     = get_lineup_slot(p)
+        slot = get_lineup_slot(p)
         on_bench = 1 if slot in ("BE", "BENCH") else 0
-        on_il    = 1 if slot in ("IL", "IR") else 0
-        proj     = get_projected_pts(p)
-        status   = get_player_status(p)
-        injured  = 1 if status not in ("ACTIVE", "NORMAL", "") else 0
+        on_il = 1 if slot in ("IL", "IR") else 0
+        proj = get_projected_pts(p)
+        status = get_player_status(p)
+        injured = 1 if status not in ("ACTIVE", "NORMAL", "") else 0
         # Penalty for dropping scarce positions
         scarcity = 0
         for scarce_pos in ("C", "SS"):
@@ -2053,15 +2098,15 @@ def _pickup_reason(player, team, adds_counter, drops_counter=None):
     Also returns a legacy string for backward compat via the "reason" key.
     drops_counter (Flaw 7): dict of norm_name → drop count, used for closer role alerts.
     """
-    items    = []
-    proj     = get_projected_pts(player)
-    repl     = get_replacement_level(player)
-    var      = max(0.0, proj - repl)
+    items = []
+    proj = get_projected_pts(player)
+    repl = get_replacement_level(player)
+    var = max(0.0, proj - repl)
     scarcity = get_scarcity_multiplier(player)
-    metrics  = get_reference_metrics(player)
-    sc       = get_statcast_metrics(player)
-    norm     = normalize_name(player.name)
-    isp      = is_pitcher(player)
+    metrics = get_reference_metrics(player)
+    sc = get_statcast_metrics(player)
+    norm = normalize_name(player.name)
+    isp = is_pitcher(player)
 
     # ── Flaw 7: Closer role change alert (show first if present) ─────────────
     if isp and drops_counter:
@@ -2073,46 +2118,73 @@ def _pickup_reason(player, team, adds_counter, drops_counter=None):
     if is_starter_role(player) and WEEKLY_STARTS["loaded"] and len(WEEKLY_STARTS["starts"]) >= 60:
         wk = get_weekly_start_count(player)
         if wk >= 2:
-            items.append({"text": "2-start week — 1.75× this-week value; single biggest in-season edge", "tone": "good"})
+            items.append({
+                "text": "2-start week — 1.75× this-week value; single biggest in-season edge",
+                "tone": "good",
+            })
         elif wk == 0:
-            items.append({"text": "0 starts this week — hold for future weeks; stream elsewhere now", "tone": "warn"})
+            items.append({
+                "text": "0 starts this week — hold for future weeks; stream elsewhere now",
+                "tone": "warn",
+            })
 
     # ── 2. Statcast regression / breakout signal ──────────────────────────────
-    signal = sc.get("signal", "") if sc else ""
     if isp:
-        xera      = sc.get("xERA", 0) if sc else 0
-        xera_gap  = sc.get("xERA_gap", 0) if sc else 0   # positive = xERA > ERA (sell/regression risk)
+        xera = sc.get("xERA", 0) if sc else 0
+        xera_gap = sc.get("xERA_gap", 0) if sc else 0  # positive = xERA > ERA (sell/regression risk)
         if xera_gap <= -1.0 and xera > 0:
-            items.append({"text": f"BUY-LOW: xERA {xera:.2f} vs actual ERA — true talent better than results suggest", "tone": "good"})
+            items.append({
+                "text": (
+                    f"BUY-LOW: xERA {xera:.2f} vs actual ERA — "
+                    "true talent better than results suggest"
+                ),
+                "tone": "good",
+            })
         elif xera_gap >= 1.0 and xera > 0:
-            items.append({"text": f"CAUTION: xERA {xera:.2f} vs ERA — underlying metrics worse than surface stats", "tone": "warn"})
+            items.append({
+                "text": (
+                    f"CAUTION: xERA {xera:.2f} vs ERA — "
+                    "underlying metrics worse than surface stats"
+                ),
+                "tone": "warn",
+            })
     else:
-        xwoba     = sc.get("xwOBA", 0) if sc else 0
+        xwoba = sc.get("xwOBA", 0) if sc else 0
         xwoba_gap = sc.get("xwOBA_gap", 0) if sc else 0  # xwOBA − wOBA (positive = buy)
         _sc_season = STATCAST_DB.get("season", YEAR)
         _sc_stale = f" [{_sc_season} data — verify {YEAR} form]" if _sc_season and _sc_season < YEAR else ""
         if xwoba_gap >= 0.030 and xwoba > 0:
-            items.append({"text": f"BREAKOUT CANDIDATE: xwOBA {xwoba:.3f} vs actual — true talent exceeds results by {xwoba_gap:+.3f}{_sc_stale}", "tone": "good"})
+            items.append({
+                "text": (
+                    f"BREAKOUT CANDIDATE: xwOBA {xwoba:.3f} vs actual — "
+                    f"true talent exceeds results by {xwoba_gap:+.3f}{_sc_stale}"
+                ),
+                "tone": "good",
+            })
         elif xwoba_gap <= -0.030 and xwoba > 0:
-            items.append({"text": f"REGRESSION RISK: xwOBA {xwoba:.3f} vs actual — luck component detected, decline likely{_sc_stale}", "tone": "warn"})
+            items.append({
+                "text": (
+                    f"REGRESSION RISK: xwOBA {xwoba:.3f} vs actual — "
+                    f"luck component detected, decline likely{_sc_stale}"
+                ),
+                "tone": "warn",
+            })
 
     # ── 3. Pitcher-specific intel ─────────────────────────────────────────────
     if isp and metrics:
-        sv    = get_metric(metrics, "SV")
-        hd    = get_metric(metrics, "HD", "HLD")
-        gs    = get_metric(metrics, "GS")
-        ip    = get_metric(metrics, "IP")
-        era   = get_metric(metrics, "ERA")
-        fip   = get_metric(metrics, "FIP")
+        sv = get_metric(metrics, "SV")
+        hd = get_metric(metrics, "HD", "HLD")
+        gs = get_metric(metrics, "GS")
+        ip = get_metric(metrics, "IP")
+        era = get_metric(metrics, "ERA")
+        fip = get_metric(metrics, "FIP")
         siera = get_metric(metrics, "SIERA")
-        kbb   = get_metric(metrics, "KBBp")  # K-BB% (decimal, e.g. 0.18)
+        kbb = get_metric(metrics, "KBBp")  # K-BB% (decimal, e.g. 0.18)
         swstr = get_metric(metrics, "SwStp")  # SwStr% (decimal)
-        k9    = get_metric(metrics, "K9")
 
         # ── Flaw 7: Dynamic closer role staleness check ──────────────────────
         # Cross-reference recent ESPN activity — if a known closer has been
         # mass-dropped this week, they likely lost the role. Flag the warning.
-        _player_norm = normalize_name(getattr(player, "name", ""))
         if sv >= 25:
             items.append({"text": f"Proven closer: {int(sv)} SV last season — direct source of SV pts", "tone": "good"})
         elif sv >= 10:
@@ -2121,99 +2193,194 @@ def _pickup_reason(player, team, adds_counter, drops_counter=None):
         if hd >= 20:
             hold_d = MARKET.get("hold_depth", 99)
             scarcity_note = f"; only {hold_d} qualifying setup men on waivers" if hold_d < 25 else ""
-            items.append({"text": f"Elite holds producer: {int(hd)} HLD last season{scarcity_note}. HD=5 pts is massively undervalued — 30 HLD ≈ same pts as elite closer", "tone": "good"})
+            items.append({
+                "text": (
+                    f"Elite holds producer: {int(hd)} HLD last season{scarcity_note}. "
+                    "HD=5 pts is massively undervalued — 30 HLD ≈ same pts as elite closer"
+                ),
+                "tone": "good",
+            })
         elif hd >= 10:
-            items.append({"text": f"Solid holds value: {int(hd)} HLD last season — setup role generates 5 pts/hold", "tone": "good"})
+            items.append({
+                "text": f"Solid holds value: {int(hd)} HLD last season — setup role generates 5 pts/hold",
+                "tone": "good",
+            })
 
         if gs >= 20 and ip > 0:
             era_note = f", ERA {era:.2f}" if era > 0 else ""
             fip_note = f" / FIP {fip:.2f}" if fip > 0 else ""
-            items.append({"text": f"Full rotation starter: {int(gs)} GS, {ip:.0f} IP{era_note}{fip_note} — volume + quality combo", "tone": "good" if era > 0 and era <= 4.00 else "neutral"})
+            items.append({
+                "text": (
+                    f"Full rotation starter: {int(gs)} GS, {ip:.0f} IP"
+                    f"{era_note}{fip_note} — volume + quality combo"
+                ),
+                "tone": "good" if era > 0 and era <= 4.00 else "neutral",
+            })
 
         if siera > 0 and siera <= 3.30:
-            items.append({"text": f"Elite SIERA {siera:.2f} — best true talent ERA estimator; accounts for batted ball mix", "tone": "good"})
+            items.append({
+                "text": (
+                    f"Elite SIERA {siera:.2f} — best true talent ERA estimator; "
+                    "accounts for batted ball mix"
+                ),
+                "tone": "good",
+            })
         elif siera > 0 and siera <= 3.80:
-            items.append({"text": f"Strong SIERA {siera:.2f} — above-average true talent, sustainable performance likely", "tone": "good"})
+            items.append({
+                "text": (
+                    f"Strong SIERA {siera:.2f} — above-average true talent, "
+                    "sustainable performance likely"
+                ),
+                "tone": "good",
+            })
 
         if kbb > 0:
             kbb_pct = kbb * 100 if kbb < 1 else kbb
             if kbb_pct >= 20:
-                items.append({"text": f"Elite K-BB% {kbb_pct:.1f}% — dominant command + swing-and-miss combo", "tone": "good"})
+                items.append({
+                    "text": f"Elite K-BB% {kbb_pct:.1f}% — dominant command + swing-and-miss combo",
+                    "tone": "good",
+                })
             elif kbb_pct >= 15:
-                items.append({"text": f"Solid K-BB% {kbb_pct:.1f}% — above-average command profile", "tone": "good"})
+                items.append({
+                    "text": f"Solid K-BB% {kbb_pct:.1f}% — above-average command profile",
+                    "tone": "good",
+                })
 
         if swstr > 0:
             sw_pct = swstr * 100 if swstr < 1 else swstr
             if sw_pct >= 13:
-                items.append({"text": f"Elite SwStr% {sw_pct:.1f}% — top-tier whiff rate; K upside is real", "tone": "good"})
+                items.append({
+                    "text": f"Elite SwStr% {sw_pct:.1f}% — top-tier whiff rate; K upside is real",
+                    "tone": "good",
+                })
 
     # ── 4. Hitter-specific intel ──────────────────────────────────────────────
     elif not isp and metrics:
-        pa    = get_metric(metrics, "PA")
-        hr    = get_metric(metrics, "HR")
-        sb    = get_metric(metrics, "SB")
-        ops   = get_metric(metrics, "OPS")
-        so    = get_metric(metrics, "SO", "K")
-        wrc   = get_metric(metrics, "wRCp")   # wRC+ (100 = league avg)
-        brl   = get_metric(metrics, "Brlp")   # Barrel% (decimal)
-        kpct  = get_metric(metrics, "Kp")     # K% (decimal)
-        spd   = get_metric(metrics, "Spd")    # Sprint speed (ft/s) — from reference
+        pa = get_metric(metrics, "PA")
+        hr = get_metric(metrics, "HR")
+        sb = get_metric(metrics, "SB")
+        so = get_metric(metrics, "SO", "K")
+        wrc = get_metric(metrics, "wRCp")   # wRC+ (100 = league avg)
+        brl = get_metric(metrics, "Brlp")   # Barrel% (decimal)
+        kpct = get_metric(metrics, "Kp")     # K% (decimal)
+        spd = get_metric(metrics, "Spd")    # Sprint speed (ft/s) — from reference
         sc_spd = sc.get("Spd", 0) if sc else 0  # Statcast sprint speed
 
         sprint = sc_spd if sc_spd > 0 else spd
 
         if pa >= 550:
-            items.append({"text": f"Everyday starter: {int(pa)} PA — full lineup volume guarantees counting stat opportunities", "tone": "good"})
+            items.append({
+                "text": (
+                    f"Everyday starter: {int(pa)} PA — full lineup volume "
+                    "guarantees counting stat opportunities"
+                ),
+                "tone": "good",
+            })
         elif pa >= 400:
-            items.append({"text": f"Regular playing time: {int(pa)} PA — consistent lineup presence", "tone": "neutral"})
+            items.append({
+                "text": f"Regular playing time: {int(pa)} PA — consistent lineup presence",
+                "tone": "neutral",
+            })
 
         if wrc >= 140:
-            items.append({"text": f"Elite wRC+ {int(wrc)} — top-tier offensive production (100 = league avg)", "tone": "good"})
+            items.append({
+                "text": f"Elite wRC+ {int(wrc)} — top-tier offensive production (100 = league avg)",
+                "tone": "good",
+            })
         elif wrc >= 115:
-            items.append({"text": f"Strong wRC+ {int(wrc)} — above-average hitter by best context-neutral metric", "tone": "good"})
+            items.append({
+                "text": f"Strong wRC+ {int(wrc)} — above-average hitter by best context-neutral metric",
+                "tone": "good",
+            })
 
         if hr >= 30:
-            items.append({"text": f"Plus power: {int(hr)} HR last season — consistent TB contributions", "tone": "good"})
+            items.append({
+                "text": f"Plus power: {int(hr)} HR last season — consistent TB contributions",
+                "tone": "good",
+            })
         elif hr >= 20:
             items.append({"text": f"Solid power: {int(hr)} HR last season", "tone": "good"})
 
         if sb >= 25:
-            items.append({"text": f"Speed weapon: {int(sb)} SB last season — SB = +2 pts each, rare asset on wire", "tone": "good"})
+            items.append({
+                "text": f"Speed weapon: {int(sb)} SB last season — SB = +2 pts each, rare asset on wire",
+                "tone": "good",
+            })
         elif sb >= 15:
             items.append({"text": f"Speed contributor: {int(sb)} SB last season", "tone": "good"})
 
         if brl > 0:
             brl_pct = brl * 100 if brl < 1 else brl
             if brl_pct >= 10:
-                items.append({"text": f"Elite barrel rate {brl_pct:.1f}% — top-tier hard contact; HR/XBH upside is real", "tone": "good"})
+                items.append({
+                    "text": (
+                        f"Elite barrel rate {brl_pct:.1f}% — top-tier hard contact; "
+                        "HR/XBH upside is real"
+                    ),
+                    "tone": "good",
+                })
 
         if sprint >= 28:
-            items.append({"text": f"Elite sprint speed {sprint:.1f} ft/s — top-10% speed; SB upside and excellent BABIP floor", "tone": "good"})
+            items.append({
+                "text": (
+                    f"Elite sprint speed {sprint:.1f} ft/s — top-10% speed; "
+                    "SB upside and excellent BABIP floor"
+                ),
+                "tone": "good",
+            })
 
         # Flag the K-rate tax — most ESPN players don't think about this
         if kpct > 0:
             k_pct_val = kpct * 100 if kpct < 1 else kpct
             so_rate = (so / max(pa, 1)) if pa > 0 else 0
             if k_pct_val >= 28 or so_rate > 0.28:
-                items.append({"text": f"⚠ High K-rate ({k_pct_val:.0f}%) — each strikeout costs 1 pt; 30% K in 600 PA = −180 pts drag", "tone": "warn"})
+                items.append({
+                    "text": (
+                        f"⚠ High K-rate ({k_pct_val:.0f}%) — each strikeout costs 1 pt; "
+                        "30% K in 600 PA = −180 pts drag"
+                    ),
+                    "tone": "warn",
+                })
             elif k_pct_val <= 15:
-                items.append({"text": f"Low K-rate {k_pct_val:.0f}% — avoids the K-tax; hidden edge vs ESPN ADP", "tone": "good"})
+                items.append({
+                    "text": f"Low K-rate {k_pct_val:.0f}% — avoids the K-tax; hidden edge vs ESPN ADP",
+                    "tone": "good",
+                })
 
     # ── 5. Scarcity + VAR context ─────────────────────────────────────────────
     if scarcity >= 1.7:
-        items.append({"text": "Scarce position — very few viable alternatives on the wire; window to add closes fast", "tone": "warn"})
+        items.append({
+            "text": (
+                "Scarce position — very few viable alternatives on the wire; "
+                "window to add closes fast"
+            ),
+            "tone": "warn",
+        })
     elif scarcity >= 1.4:
         items.append({"text": "Moderately scarce position — limited depth at this spot", "tone": "neutral"})
 
     if var >= 200 and not any(i["tone"] == "good" for i in items):
-        items.append({"text": f"Elite VAR +{var:.0f} — ranks in top tier vs replacement-level players at this position", "tone": "good"})
+        items.append({
+            "text": (
+                f"Elite VAR +{var:.0f} — ranks in top tier vs replacement-level "
+                "players at this position"
+            ),
+            "tone": "good",
+        })
     elif var >= 100 and len(items) < 2:
-        items.append({"text": f"Strong VAR +{var:.0f} — solid upgrade over freely available replacement", "tone": "good"})
+        items.append({
+            "text": f"Strong VAR +{var:.0f} — solid upgrade over freely available replacement",
+            "tone": "good",
+        })
 
     # ── 6. Market urgency ─────────────────────────────────────────────────────
     add_ct = adds_counter.get(norm, 0)
     if add_ct >= 2:
-        items.append({"text": f"Hot on the wire — {add_ct} teams actively targeting him this week; act fast", "tone": "warn"})
+        items.append({
+            "text": f"Hot on the wire — {add_ct} teams actively targeting him this week; act fast",
+            "tone": "warn",
+        })
     elif add_ct == 1:
         items.append({"text": "Drawing waiver interest from at least one other team", "tone": "neutral"})
 
@@ -2237,7 +2404,7 @@ def get_waiver_recommendations(league, my_team, size=500, recent_adds=None, rece
     if recent_adds is None:
         adds, drops, _ = get_recent_activity(league, size=50)
     else:
-        adds  = recent_adds
+        adds = recent_adds
         drops = recent_drops or {}
     clear_closer_alert_cache()   # reset per-run closer alert cache
 
@@ -2256,16 +2423,16 @@ def get_waiver_recommendations(league, my_team, size=500, recent_adds=None, rece
 
     scored.sort(key=lambda x: x[0], reverse=True)
 
-    results     = []
+    results = []
     pitcher_cnt = 0
-    hitter_cnt  = 0
-    pos_counts  = {}
+    hitter_cnt = 0
+    pos_counts = {}
 
     # Increased limits: up to 15 hitters + 15 pitchers = 30 total
-    MAX_TOTAL   = 30
+    MAX_TOTAL = 30
     MAX_PITCHERS = 15
-    MAX_HITTERS  = 15
-    MAX_PER_POS  = 4   # max per primary position (was 3)
+    MAX_HITTERS = 15
+    MAX_PER_POS = 4   # max per primary position (was 3)
 
     for fs, bs, player in scored:
         if len(results) >= MAX_TOTAL:
@@ -2296,8 +2463,10 @@ def get_waiver_recommendations(league, my_team, size=500, recent_adds=None, rece
             "reason_items":  reason_items,      # structured bullet list
         })
 
-        if is_pitcher(player): pitcher_cnt += 1
-        else:                  hitter_cnt  += 1
+        if is_pitcher(player):
+            pitcher_cnt += 1
+        else:
+            hitter_cnt += 1
         pos_counts[primary_pos] = pos_counts.get(primary_pos, 0) + 1
 
     return results
@@ -2306,6 +2475,7 @@ def get_waiver_recommendations(league, my_team, size=500, recent_adds=None, rece
 # ══════════════════════════════════════════════════════════════════════════════
 # MATCHUP & WIN PROBABILITY
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def best_lineup_pts(team, weekly=False):
     """
@@ -2318,7 +2488,7 @@ def best_lineup_pts(team, weekly=False):
     """
     proj_fn = get_weekly_projected_pts if weekly else get_projected_pts
     remaining = list(team.roster)
-    total     = 0.0
+    total = 0.0
     for slot in ["C", "1B", "2B", "3B", "SS", "OF", "OF", "OF", "UTIL",
                  "P", "P", "P", "P", "P", "P", "P"]:
         if slot == "UTIL":
@@ -2332,7 +2502,7 @@ def best_lineup_pts(team, weekly=False):
             candidates = [p for p in candidates if proj_fn(p) > 0]
         if not candidates:
             continue
-        best   = max(candidates, key=proj_fn)
+        best = max(candidates, key=proj_fn)
         total += proj_fn(best)
         remaining.remove(best)
     return total
@@ -2347,13 +2517,13 @@ def win_probability(league, my_team):
         }
 
     if matchup.home_team.team_name == me.team_name:
-        my_live  = as_float(safe_get(matchup, "home_score", default=0))
+        my_live = as_float(safe_get(matchup, "home_score", default=0))
         opp_live = as_float(safe_get(matchup, "away_score", default=0))
     else:
-        my_live  = as_float(safe_get(matchup, "away_score", default=0))
+        my_live = as_float(safe_get(matchup, "away_score", default=0))
         opp_live = as_float(safe_get(matchup, "home_score", default=0))
 
-    my_proj  = best_lineup_pts(me, weekly=True) or 0.0
+    my_proj = best_lineup_pts(me, weekly=True) or 0.0
     opp_proj = best_lineup_pts(opp, weekly=True) or 0.0
 
     my_inj = sum(
@@ -2368,14 +2538,14 @@ def win_probability(league, my_team):
     )
 
     score_margin = my_live - opp_live
-    proj_margin  = my_proj - opp_proj
-    inj_margin   = (opp_inj - my_inj) * 8.0
+    proj_margin = my_proj - opp_proj
+    inj_margin = (opp_inj - my_inj) * 8.0
 
-    blended  = (0.80 * score_margin) + (0.20 * proj_margin) + inj_margin
+    blended = (0.80 * score_margin) + (0.20 * proj_margin) + inj_margin
     # Cap the exponent to prevent math overflow with extreme margins
     exp_input = max(-100.0, min(100.0, -blended / 12.0))
     raw_prob = 1.0 / (1.0 + math.exp(exp_input))
-    prob     = 0.07 + 0.86 * raw_prob
+    prob = 0.07 + 0.86 * raw_prob
 
     return {
         "my_score":  my_live,
@@ -2391,29 +2561,32 @@ def win_probability(league, my_team):
 # TEAM SUMMARY
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def team_summary(team):
     base_tot = fit_tot = active_base = active_fit = h_base = p_base = 0.0
-    inj_cnt  = 0
+    inj_cnt = 0
 
     for p in team.roster:
-        bs   = base_score(p)
-        fs   = fit_score(p, team)
+        bs = base_score(p)
+        fs = fit_score(p, team)
         slot = get_lineup_slot(p)
 
         base_tot += bs
-        fit_tot  += fs
+        fit_tot += fs
 
         if is_active_slot(slot):
             active_base += bs
-            active_fit  += fs
+            active_fit += fs
 
-        if is_pitcher(p): p_base += bs
-        else:             h_base += bs
+        if is_pitcher(p):
+            p_base += bs
+        else:
+            h_base += bs
 
         if get_player_status(p) not in ("ACTIVE", "NORMAL", ""):
             inj_cnt += 1
 
-    lineup_pts        = best_lineup_pts(team)
+    lineup_pts = best_lineup_pts(team)
     weekly_lineup_pts = best_lineup_pts(team, weekly=True)
 
     return {
@@ -2423,7 +2596,7 @@ def team_summary(team):
         "active_base":       active_base,
         "active_fit":        active_fit,
         "lineup_pts":        lineup_pts,        # season-projection best lineup
-        "weekly_lineup_pts": weekly_lineup_pts, # this-week best lineup (primary display)
+        "weekly_lineup_pts": weekly_lineup_pts,  # this-week best lineup (primary display)
         "hitter_base":       h_base,
         "pitcher_base":      p_base,
         "injury_count":      inj_cnt,
@@ -2433,6 +2606,7 @@ def team_summary(team):
 # ══════════════════════════════════════════════════════════════════════════════
 # POWER RANKINGS
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def compute_power_rankings(league) -> dict:
     """
@@ -2489,9 +2663,9 @@ def compute_power_rankings(league) -> dict:
         depth = 0.0
         stash = 0.0
         for p in team.roster:
-            slot   = get_lineup_slot(p)
+            slot = get_lineup_slot(p)
             status = get_player_status(p)
-            on_il  = slot in ("IL", "IR") or status not in ("ACTIVE", "NORMAL", "")
+            on_il = slot in ("IL", "IR") or status not in ("ACTIVE", "NORMAL", "")
 
             if not on_il:
                 # Active player: add their season VAR
@@ -2503,7 +2677,7 @@ def compute_power_rankings(league) -> dict:
                 #   IL/IR slot (formally placed):  0.50× — longer absence expected
                 #   Active-roster injured (DL/DTD): 0.70× — likely closer to return
                 discount = 0.50 if slot in ("IL", "IR") else 0.70
-                stash   += get_stash_score(p) * discount
+                stash += get_stash_score(p) * discount
 
         depth_scores.append(depth)
         stash_scores.append(stash)
@@ -2552,10 +2726,10 @@ def _fetch_player_age(player) -> int:
     age = -1
     if mlbam:
         try:
-            url  = f"https://statsapi.mlb.com/api/v1/people/{mlbam}?fields=people,currentAge"
+            url = f"https://statsapi.mlb.com/api/v1/people/{mlbam}?fields=people,currentAge"
             data = _mlb_get(url, timeout=6)
-            ppl  = data.get("people", [{}])
-            age  = int(ppl[0].get("currentAge", -1)) if ppl else -1
+            ppl = data.get("people", [{}])
+            age = int(ppl[0].get("currentAge", -1)) if ppl else -1
         except Exception:
             age = -1
 
@@ -2587,10 +2761,11 @@ def age_tier(age: int) -> dict:
         return {"tier": 3, "label": "Peak",     "flag": "✅ Peak",      "color": "good"}
     if age <= 33:
         return {"tier": 4, "label": "Decline",  "flag": "⚠ Aging",     "color": "warn"}
-    return     {"tier": 5, "label": "Late",     "flag": "🔻 Late Career","color": "bad"}
+    return {"tier": 5, "label": "Late", "flag": "🔻 Late Career", "color": "bad"}
 
 
 # ── Phase 5: Velocity alerts ──────────────────────────────────────────────────
+
 
 def _velocity_alert(player) -> str:
     """
@@ -2606,9 +2781,9 @@ def _velocity_alert(player) -> str:
     if not sc:
         return ""
     signal = sc.get("signal", "")
-    xera   = sc.get("xERA", 0.0)
-    era    = sc.get("ERA", 0.0)
-    gap    = sc.get("xERA_gap", 0.0)     # positive = xERA > ERA (sell/regression risk)
+    xera = sc.get("xERA", 0.0)
+    era = sc.get("ERA", 0.0)
+    gap = sc.get("xERA_gap", 0.0)     # positive = xERA > ERA (sell/regression risk)
     stale_note = " [2025 data]" if STATCAST_DB.get("season") and STATCAST_DB["season"] < YEAR else ""
     if signal == "BUY_LOW" and gap <= -0.75:
         return f"Buy-Low: ERA {era:.2f} but xERA {xera:.2f} ({gap:.2f}){stale_note}"
@@ -2619,7 +2794,7 @@ def _velocity_alert(player) -> str:
 
 def _player_row(player, team_ctx):
     status = get_player_status(player)
-    slot   = get_lineup_slot(player)   # resolve once; used in "pos" and "on_il"
+    slot = get_lineup_slot(player)   # resolve once; used in "pos" and "on_il"
     # Compute age once — avoids double network call (even with caching, two
     # separate calls are wasteful; the batch prefetch means this is usually free)
     _age = _fetch_player_age(player)
@@ -2681,15 +2856,15 @@ def _build_adv_json(player):
     modal can render charts without any additional network calls.
     Token-optimized: only non-zero values are included in the output.
     """
-    ref  = get_reference_metrics(player)   # FanGraphs Phase 1 metrics
-    sc   = get_statcast_metrics(player)    # Statcast Phase 2 metrics
-    isp  = is_pitcher(player)
+    ref = get_reference_metrics(player)   # FanGraphs Phase 1 metrics
+    sc = get_statcast_metrics(player)    # Statcast Phase 2 metrics
+    isp = is_pitcher(player)
 
     # Value breakdown components (for the waterfall chart)
-    proj  = get_projected_pts(player)
-    repl  = get_replacement_level(player)
-    var   = max(0.0, proj - repl)
-    bs    = base_score(player)
+    proj = get_projected_pts(player)
+    repl = get_replacement_level(player)
+    var = max(0.0, proj - repl)
+    bs = base_score(player)
 
     def _f(v, d=3):
         """Format float for compact JSON — drop trailing zeros."""
@@ -2701,7 +2876,7 @@ def _build_adv_json(player):
 
     if isp:
         _swstp = _f(ref.get("SwStp", 0), 4)
-        _k9    = _f(ref.get("K9",    0))
+        _k9 = _f(ref.get("K9",    0))
         adv = {
             # ERA estimators
             "ERA":   _f(ref.get("ERA",   0)),
@@ -2727,11 +2902,11 @@ def _build_adv_json(player):
             # Regression signals
             "HRFBp": _f(ref.get("HRFBp", 0), 4),
             "LOBp":  _f(ref.get("LOBp",  0), 4),
-            "BABIPp":_f(ref.get("BABIPp",0), 4),
+            "BABIPp": _f(ref.get("BABIPp", 0), 4),
             "WAR":   _f(ref.get("WAR",   0)),
             # Statcast (Phase 2 — may be 0 if cache not built)
             "xERA":     _f(sc.get("xERA",    0)),
-            "xERA_gap": _f(sc.get("xERA_gap",0)),
+            "xERA_gap": _f(sc.get("xERA_gap", 0)),
             "xwOBA_a":  _f(sc.get("xwOBA_a", 0), 4),
             "Brlp_a":   _f(sc.get("Brlp_a",  0), 4),
             "HHp_a":    _f(sc.get("HHp_a",   0), 4),
@@ -2745,7 +2920,7 @@ def _build_adv_json(player):
         }
     else:
         _wrcp = _f(ref.get("wRCp", 0))
-        _kp   = _f(ref.get("Kp",   0), 4)
+        _kp = _f(ref.get("Kp",   0), 4)
         _brlp = _f(ref.get("Brlp", 0), 4)
         adv = {
             # Core value metrics — internal abbreviated keys
@@ -2774,7 +2949,7 @@ def _build_adv_json(player):
             "WAR":   _f(ref.get("WAR",   0)),
             # Statcast (Phase 2)
             "xwOBA":     _f(sc.get("xwOBA",    0), 4),
-            "xwOBA_gap": _f(sc.get("xwOBA_gap",0), 4),
+            "xwOBA_gap": _f(sc.get("xwOBA_gap", 0), 4),
             "xBA":       _f(sc.get("xBA",      0), 4),
             "xSLG":      _f(sc.get("xSLG",     0), 4),
             "EV":        _f(sc.get("EV",       0)),
@@ -2796,13 +2971,13 @@ def _build_adv_json(player):
 
     # ── Phase 5+6: velocity alert + aging tier (always include) ─────────────
     velo_alert = _velocity_alert(player)
-    age        = _fetch_player_age(player)
-    at         = age_tier(age)
+    age = _fetch_player_age(player)
+    at = age_tier(age)
     adv["velo_alert"] = velo_alert
-    adv["age"]        = age if age > 0 else 0
-    adv["age_label"]  = at.get("label", "")
-    adv["age_flag"]   = at.get("flag",  "")
-    adv["age_color"]  = at.get("color", "")
+    adv["age"] = age if age > 0 else 0
+    adv["age_label"] = at.get("label", "")
+    adv["age_flag"] = at.get("flag",  "")
+    adv["age_color"] = at.get("color", "")
 
     # Strip zero values to keep JSON compact (token-optimization)
     compact = {k: v for k, v in adv.items() if v != 0 and v != "" and v != 0.0}
@@ -2812,12 +2987,12 @@ def _build_adv_json(player):
 # MLB SCHEDULE INTEGRATION
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def _parse_game_time(utc_str):
     """'2026-03-24T23:10:00Z' → '7:10 PM ET'  (EDT = UTC-4, active during season)."""
     try:
-        from datetime import timezone, timedelta
         dt = datetime.fromisoformat(utc_str.replace("Z", "+00:00"))
-        et = timezone(timedelta(hours=-4))   # EDT; change to -5 for winter months
+        et = timezone(timedelta(hours=-4))  # EDT; change to -5 for winter months
         return dt.astimezone(et).strftime("%-I:%M %p ET")
     except Exception:
         return "TBD"
@@ -2831,7 +3006,8 @@ def _mlb_get(url: str, timeout: int = 10) -> dict:
     Python's bundled SSL doesn't use the system keychain.
     Raises on any network / HTTP error.
     """
-    import requests, certifi
+    import requests
+    import certifi
     resp = requests.get(url, timeout=timeout, verify=certifi.where())
     resp.raise_for_status()
     return resp.json()
@@ -2854,23 +3030,27 @@ def fetch_todays_mlb_schedule():
         for date_block in raw.get("dates", []):
             for g in date_block.get("games", []):
                 teams_data = g.get("teams", {})
-                away_data  = teams_data.get("away", {})
-                home_data  = teams_data.get("home", {})
-                away_t  = away_data.get("team", {})
-                home_t  = home_data.get("team", {})
-                status  = g.get("status", {}).get("detailedState", "Scheduled")
+                away_data = teams_data.get("away", {})
+                home_data = teams_data.get("home", {})
+                away_t = away_data.get("team", {})
+                home_t = home_data.get("team", {})
+                status = g.get("status", {}).get("detailedState", "Scheduled")
                 utc_str = g.get("gameDate", "")
                 away_pp = away_data.get("probablePitcher", {})
                 home_pp = home_data.get("probablePitcher", {})
 
                 # Extract confirmed lineup player IDs (empty if lineups not posted yet)
                 def _extract_lineup_ids(team_data):
-                    entries = team_data.get("lineupEntry", []) or team_data.get("lineup", {}).get("lineupEntry", []) or []
+                    entries = (
+                        team_data.get("lineupEntry", [])
+                        or team_data.get("lineup", {}).get("lineupEntry", [])
+                        or []
+                    )
                     return [str(e.get("person", {}).get("id", "")) for e in entries if e.get("person", {}).get("id")]
 
                 away_lineup_ids = _extract_lineup_ids(away_data)
                 home_lineup_ids = _extract_lineup_ids(home_data)
-                lineups_posted  = bool(away_lineup_ids or home_lineup_ids)
+                lineups_posted = bool(away_lineup_ids or home_lineup_ids)
 
                 games.append({
                     "time_str":          _parse_game_time(utc_str),
@@ -2900,9 +3080,8 @@ def fetch_todays_mlb_schedule():
 
 def _current_week_range():
     """Return (YYYY-MM-DD, YYYY-MM-DD) for the Mon–Sun fantasy week containing today."""
-    from datetime import timedelta
     today = datetime.now()
-    monday = today - timedelta(days=today.weekday())      # weekday() 0 = Monday
+    monday = today - timedelta(days=today.weekday())  # weekday() 0 = Monday
     sunday = monday + timedelta(days=6)
     return monday.strftime("%Y-%m-%d"), sunday.strftime("%Y-%m-%d")
 
@@ -2946,8 +3125,12 @@ def fetch_weekly_probable_starts(week_start: str, week_end: str) -> dict:
         print(f"  Weekly probable starters: {len(starts)} pitchers found ({week_start} → {week_end})")
     except Exception as exc:
         print(f"  Weekly probable starters: fetch failed ({exc}) — multiplier skipped")
-        WEEKLY_STARTS.update({"starts": {}, "loaded": True,
-                               "week_start": week_start, "week_end": week_end})
+        WEEKLY_STARTS.update({
+            "starts": {},
+            "loaded": True,
+            "week_start": week_start,
+            "week_end": week_end,
+        })
 
     return WEEKLY_STARTS["starts"]
 
@@ -2981,7 +3164,6 @@ def get_two_start_multiplier(player) -> float:
     return 0.30      # no start this week — minimal weekly contribution
 
 
-
 def annotate_games_with_players(games, my_rows, opp_rows):
     """For each game, find players from either roster whose mlb team is playing."""
     def _abbr(s):
@@ -3004,6 +3186,7 @@ def annotate_games_with_players(games, my_rows, opp_rows):
 # Rate each active hitter's today-game matchup vs. the opposing probable starter
 # using Phase 1 FanGraphs advanced metrics (FIP, xFIP, SIERA, SwStr%).
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def _lookup_pitcher_metrics_by_name(pitcher_name: str) -> dict:
     """Return FanGraphs reference metrics for a pitcher by display name."""
@@ -3050,9 +3233,11 @@ _PARK_FACTORS = {
     "TEX": 0.92,  # Globe Life Field — one of MLB's toughest for hitters
 }
 
+
 def get_park_factor(team_abbr: str) -> float:
     """Return park factor for a team's home ballpark (1.0 = neutral)."""
     return _PARK_FACTORS.get(str(team_abbr).upper(), 1.0)
+
 
 def grade_pitcher_matchup(pitcher_name: str, park_factor: float = 1.0) -> dict:
     """
@@ -3077,12 +3262,12 @@ def grade_pitcher_matchup(pitcher_name: str, park_factor: float = 1.0) -> dict:
         }
 
     siera = get_metric(m, "SIERA")
-    xfip  = get_metric(m, "xFIP")
-    fip   = get_metric(m, "FIP")
-    era   = get_metric(m, "ERA")
+    xfip = get_metric(m, "xFIP")
+    fip = get_metric(m, "FIP")
+    era = get_metric(m, "ERA")
     swstr = get_metric(m, "SwStp")
-    kbb   = get_metric(m, "KBBp")
-    ip    = get_metric(m, "IP")
+    kbb = get_metric(m, "KBBp")
+    ip = get_metric(m, "IP")
 
     # Best ERA estimator — first non-zero in priority order
     era_key = "SIERA"
@@ -3185,7 +3370,7 @@ def build_hitter_matchups_today(my_roster_rows: list, today_games: list) -> list
 
         game_str = f"{game['away_abbr']} @ {game['home_abbr']}"
         # Determine home team for park factor lookup
-        home_abbr  = game.get("home_abbr", "").upper()
+        home_abbr = game.get("home_abbr", "").upper()
         _park_factor = get_park_factor(home_abbr)
         grade_info = grade_pitcher_matchup(opp_pitcher, park_factor=_park_factor)
 
@@ -3253,13 +3438,15 @@ def _mlbam_from_name(name: str) -> str:
         return _NAME_TO_MLBAM_CACHE[key]
     try:
         import urllib.parse
-        url  = (f"https://statsapi.mlb.com/api/v1/people/search"
-                f"?names={urllib.parse.quote(name)}&sportId=1")
+        url = (
+            f"https://statsapi.mlb.com/api/v1/people/search"
+            f"?names={urllib.parse.quote(name)}&sportId=1"
+        )
         data = _mlb_get(url, timeout=8)
         people = data.get("people", [])
         # Prefer active players; fall back to any result
         active = [p for p in people if p.get("active", False)]
-        hit    = active[0] if active else (people[0] if people else None)
+        hit = active[0] if active else (people[0] if people else None)
         result = str(hit["id"]) if hit else ""
     except Exception:
         result = ""
@@ -3269,6 +3456,7 @@ def _mlbam_from_name(name: str) -> str:
     if result:
         _SC_NAME_TO_MLBAM[normalize_name(name)] = result
     return result
+
 
 def _fetch_career_stats(mlbam_id: str, group: str = "pitching") -> list:
     """
@@ -3286,7 +3474,7 @@ def _fetch_career_stats(mlbam_id: str, group: str = "pitching") -> list:
         f"https://statsapi.mlb.com/api/v1/people/{mlbam_id}/stats"
         f"?stats=yearByYear&group={group}&sportId=1"
     )
-    raw    = _mlb_get(url, timeout=12)
+    raw = _mlb_get(url, timeout=12)
     splits = []
     for entry in raw.get("stats", []):
         for split in entry.get("splits", []):
@@ -3314,53 +3502,68 @@ def _pts_from_mlb_pitcher_stats(s: dict, sp_mode: bool, extrapolate: bool = True
       SP: assume 32 GS / 190 IP if the player had ≥8 GS but <150 IP
       RP: assume 65 G  / 65 IP  if the player had ≥20 G  but <55 IP
     """
-    ip  = as_float(s.get("inningsPitched",  0))
-    gs  = as_float(s.get("gamesStarted",    0))
-    g   = as_float(s.get("gamesPlayed",     gs))
-    sv  = as_float(s.get("saves",           0))
-    hd  = as_float(s.get("holds",           0))
-    w   = as_float(s.get("wins",            0))
-    l   = as_float(s.get("losses",          0))
-    so  = as_float(s.get("strikeOuts",      0))
-    bb  = as_float(s.get("baseOnBalls",     0))
-    h   = as_float(s.get("hits",            0))
-    er  = as_float(s.get("earnedRuns",      0))
-    hr  = as_float(s.get("homeRuns",        0))
-    bs  = as_float(s.get("blownSaves",      0))
-    qs  = as_float(s.get("qualityStarts",   0))
+    ip = as_float(s.get("inningsPitched", 0))
+    gs = as_float(s.get("gamesStarted", 0))
+    g = as_float(s.get("gamesPlayed", gs))
+    sv = as_float(s.get("saves", 0))
+    hd = as_float(s.get("holds", 0))
+    w = as_float(s.get("wins", 0))
+    losses = as_float(s.get("losses", 0))
+    so = as_float(s.get("strikeOuts", 0))
+    bb = as_float(s.get("baseOnBalls", 0))
+    h = as_float(s.get("hits", 0))
+    er = as_float(s.get("earnedRuns", 0))
+    hr = as_float(s.get("homeRuns", 0))
+    bs = as_float(s.get("blownSaves", 0))
+    qs = as_float(s.get("qualityStarts", 0))
     if qs == 0 and gs > 0:
-        qs = gs * 0.55      # estimate when not available
+        qs = gs * 0.55  # estimate when not available
 
     if extrapolate:
         if sp_mode and gs >= 8 and ip < 150:
             # Partial SP season (e.g. Cole's 17 GS / 99 IP before TJS)
             # → scale to a typical 32-start full season
             scale = 32.0 / max(gs, 1)
-            ip *= scale;  gs *= scale;  w  *= scale;  l  *= scale
-            so *= scale;  bb *= scale;  h  *= scale;  er *= scale
-            hr *= scale;  qs *= scale
+            ip *= scale
+            gs *= scale
+            w *= scale
+            losses *= scale
+            so *= scale
+            bb *= scale
+            h *= scale
+            er *= scale
+            hr *= scale
+            qs *= scale
         elif (not sp_mode) and g >= 20 and ip < 55:
             # Partial RP season → scale to a typical 65-appearance season
             scale = 65.0 / max(g, 1)
-            ip *= scale;  g  *= scale;  sv *= scale;  hd *= scale
-            w  *= scale;  so *= scale;  bb *= scale;  h  *= scale
-            er *= scale;  hr *= scale;  bs *= scale
+            ip *= scale
+            g *= scale
+            sv *= scale
+            hd *= scale
+            w *= scale
+            so *= scale
+            bb *= scale
+            h *= scale
+            er *= scale
+            hr *= scale
+            bs *= scale
 
-    score  = PITCHING_SCORING["IP"]   * ip
-    score += PITCHING_SCORING["H"]    * h
-    score += PITCHING_SCORING["ER"]   * er
-    score += PITCHING_SCORING["HR"]   * hr
-    score += PITCHING_SCORING["BB"]   * bb
-    score += PITCHING_SCORING["K"]    * so
-    score += PITCHING_SCORING["QS"]   * qs
-    score += PITCHING_SCORING["W"]    * w
-    score += PITCHING_SCORING["L"]    * l
-    score += PITCHING_SCORING["SV"]   * sv
-    score += PITCHING_SCORING["BS"]   * bs
-    score += PITCHING_SCORING["HD"]   * hd
+    score = PITCHING_SCORING["IP"] * ip
+    score += PITCHING_SCORING["H"] * h
+    score += PITCHING_SCORING["ER"] * er
+    score += PITCHING_SCORING["HR"] * hr
+    score += PITCHING_SCORING["BB"] * bb
+    score += PITCHING_SCORING["K"] * so
+    score += PITCHING_SCORING["QS"] * qs
+    score += PITCHING_SCORING["W"] * w
+    score += PITCHING_SCORING["L"] * losses
+    score += PITCHING_SCORING["SV"] * sv
+    score += PITCHING_SCORING["BS"] * bs
+    score += PITCHING_SCORING["HD"] * hd
     score += PITCHING_SCORING["SVHD"] * (sv + hd)
-    score += PITCHING_SCORING["CG"]   * (gs * 0.01)
-    score += PITCHING_SCORING["SO"]   * (gs * 0.001)
+    score += PITCHING_SCORING["CG"] * (gs * 0.01)
+    score += PITCHING_SCORING["SO"] * (gs * 0.001)
     return max(0.0, score)
 
 
@@ -3369,35 +3572,43 @@ def _pts_from_mlb_hitter_stats(s: dict, extrapolate: bool = True) -> float:
     Convert an MLB Stats API hitter stat dict to our league's fantasy points.
     Extrapolates partial seasons (PA ≥ 100 but < 450) to a 550-PA full season.
     """
-    pa  = as_float(s.get("plateAppearances", 0))
-    h   = as_float(s.get("hits",             0))
-    d   = as_float(s.get("doubles",          0))
-    t   = as_float(s.get("triples",          0))
-    hr  = as_float(s.get("homeRuns",         0))
-    r   = as_float(s.get("runs",             0))
-    rbi = as_float(s.get("rbi",              0))
-    sb  = as_float(s.get("stolenBases",      0))
-    bb  = as_float(s.get("baseOnBalls",      0))
-    so  = as_float(s.get("strikeOuts",       0))
-    tb  = as_float(s.get("totalBases",       0))
+    pa = as_float(s.get("plateAppearances", 0))
+    h = as_float(s.get("hits", 0))
+    d = as_float(s.get("doubles", 0))
+    t = as_float(s.get("triples", 0))
+    hr = as_float(s.get("homeRuns", 0))
+    r = as_float(s.get("runs", 0))
+    rbi = as_float(s.get("rbi", 0))
+    sb = as_float(s.get("stolenBases", 0))
+    bb = as_float(s.get("baseOnBalls", 0))
+    so = as_float(s.get("strikeOuts", 0))
+    tb = as_float(s.get("totalBases", 0))
     if tb == 0 and h > 0:
         tb = h + d + 2 * t + 3 * hr   # singles=1, 2B=2, 3B=3, HR=4
 
     if extrapolate and 100 <= pa < 450:
         scale = 550.0 / pa
-        h  *= scale;  d  *= scale;  t   *= scale;  hr  *= scale
-        r  *= scale;  rbi *= scale; sb  *= scale;  bb  *= scale
-        so *= scale;  tb  *= scale; pa  *= scale
+        h *= scale
+        d *= scale
+        t *= scale
+        hr *= scale
+        r *= scale
+        rbi *= scale
+        sb *= scale
+        bb *= scale
+        so *= scale
+        tb *= scale
+        pa *= scale
 
-    score  = BATTING_SCORING["R"]     * r
-    score += BATTING_SCORING["HR"]    * hr
-    score += BATTING_SCORING["TB"]    * tb
-    score += BATTING_SCORING["RBI"]   * rbi
-    score += BATTING_SCORING["BB"]    * bb
-    score += BATTING_SCORING["SB"]    * sb
-    score += BATTING_SCORING["K"]     * so
+    score = BATTING_SCORING["R"] * r
+    score += BATTING_SCORING["HR"] * hr
+    score += BATTING_SCORING["TB"] * tb
+    score += BATTING_SCORING["RBI"] * rbi
+    score += BATTING_SCORING["BB"] * bb
+    score += BATTING_SCORING["SB"] * sb
+    score += BATTING_SCORING["K"] * so
     score += BATTING_SCORING["GWRBI"] * (rbi * 0.02)
-    score += BATTING_SCORING["GSHR"]  * (pa  * 0.003)
+    score += BATTING_SCORING["GSHR"] * (pa * 0.003)
     return max(0.0, score)
 
 
@@ -3430,7 +3641,7 @@ def _last_healthy_season_pts(player) -> float:
     if not mlbam:
         return 0.0
 
-    is_p  = is_pitcher(player)
+    is_p = is_pitcher(player)
     is_sp = is_starter_role(player)
     group = "pitching" if is_p else "hitting"
 
@@ -3447,7 +3658,7 @@ def _last_healthy_season_pts(player) -> float:
         if is_p:
             ip = as_float(s.get("inningsPitched", 0))
             gs = as_float(s.get("gamesStarted",   0))
-            g  = as_float(s.get("gamesPlayed",    0))
+            g = as_float(s.get("gamesPlayed",    0))
             if is_sp:
                 if gs < 10 or ip < 40:
                     continue     # not enough starts to qualify
@@ -3465,9 +3676,9 @@ def _last_healthy_season_pts(player) -> float:
             continue     # sanity floor — ignore noise
 
         years_ago = YEAR - yr
-        discount  = {1: 0.93, 2: 0.85, 3: 0.77}.get(years_ago, 0.68)
-        result    = pts * discount
-        print(f"    [stash] {getattr(player,'name','?')}: "
+        discount = {1: 0.93, 2: 0.85, 3: 0.77}.get(years_ago, 0.68)
+        result = pts * discount
+        print(f"    [stash] {getattr(player, 'name', '?')}: "
               f"{yr} stats ({pts:.0f} pts) × {discount} discount = {result:.0f} healthy pts")
         return result
 
@@ -3492,8 +3703,8 @@ def get_healthy_projected_pts(player):
       3. avg_points × 26
     """
     status = get_player_status(player)
-    slot   = get_lineup_slot(player)
-    on_il  = slot in ("IL", "IR") or status not in ("ACTIVE", "NORMAL", "")
+    slot = get_lineup_slot(player)
+    on_il = slot in ("IL", "IR") or status not in ("ACTIVE", "NORMAL", "")
 
     if on_il:
         # 1. Prior-season reference DB — full healthy-season baseline
@@ -3564,17 +3775,20 @@ def get_stash_score(player):
 
 def is_worth_stashing(player):
     """True if player is on IL/IR and their healthy stash score clears the threshold."""
-    slot   = get_lineup_slot(player)
+    slot = get_lineup_slot(player)
     status = get_player_status(player)
-    on_il  = slot in ("IL", "IR") or status not in ("ACTIVE", "NORMAL", "")
+    on_il = slot in ("IL", "IR") or status not in ("ACTIVE", "NORMAL", "")
     if not on_il:
         return False
     return get_stash_score(player) >= STASH_SCORE_THRESHOLD
 
 
-def _get_player_game_log_stats(mlbam_id: str, season: int,
-                                lookback_days: int = 45,
-                                is_pitcher_p: bool = False) -> list:
+def _get_player_game_log_stats(
+    mlbam_id: str,
+    season: int,
+    lookback_days: int = 45,
+    is_pitcher_p: bool = False,
+) -> list:
     """
     Fetch recent game-log entries for a player from the MLB Stats API.
     Returns a list of per-game stat dicts (last lookback_days days), or [] on any error.
@@ -3583,7 +3797,6 @@ def _get_player_game_log_stats(mlbam_id: str, season: int,
         return []
     group = "pitching" if is_pitcher_p else "hitting"
     try:
-        from datetime import timedelta
         cutoff = (datetime.now() - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
         url = (
             f"https://statsapi.mlb.com/api/v1/people/{mlbam_id}/stats"
@@ -3613,14 +3826,14 @@ def get_season_trend(player) -> dict:
     if not mlbam:
         return {"trend": "insufficient_data", "games_recent": 0, "summary": "No MLBAM ID"}
 
-    is_p  = is_pitcher(player)
+    is_p = is_pitcher(player)
     games = _get_player_game_log_stats(mlbam, YEAR, SEASON_TREND_LOOKBACK, is_pitcher_p=is_p)
 
     if len(games) < SEASON_TREND_MIN_GAMES:
         return {
             "trend": "insufficient_data",
             "games_recent": len(games),
-            "summary": f"Only {len(games)} game{'s' if len(games)!=1 else ''} tracked so far",
+            "summary": f"Only {len(games)} game{'s' if len(games) != 1 else ''} tracked so far",
         }
 
     ref = get_reference_metrics(player)
@@ -3635,11 +3848,11 @@ def get_season_trend(player) -> dict:
             baseline_era = 4.50
 
         if recent_era < baseline_era * 0.80:
-            trend   = "hot"
+            trend = "hot"
         elif recent_era > baseline_era * 1.25:
-            trend   = "cold"
+            trend = "cold"
         else:
-            trend   = "stable"
+            trend = "stable"
         summary = (
             f"ERA {recent_era:.2f} vs {baseline_era:.2f} baseline"
             f" ({len(games)} G, {total_ip:.1f} IP)"
@@ -3661,11 +3874,11 @@ def get_season_trend(player) -> dict:
             baseline_ops = 0.720
 
         if recent_ops > baseline_ops * 1.15:
-            trend   = "hot"
+            trend = "hot"
         elif recent_ops < baseline_ops * 0.80:
-            trend   = "cold"
+            trend = "cold"
         else:
-            trend   = "stable"
+            trend = "stable"
         summary = (
             f"OPS {recent_ops:.3f} vs {baseline_ops:.3f} baseline"
             f" ({len(ops_list)} games)"
@@ -3682,17 +3895,17 @@ def _get_season_intel_my_il(my_team) -> list:
     """
     results = []
     for p in my_team.roster:
-        slot   = get_lineup_slot(p)
+        slot = get_lineup_slot(p)
         status = get_player_status(p)
         # Include anyone on IL/IR slot OR with an active injury flag
         if slot not in ("IL", "IR") and status in ("ACTIVE", "NORMAL", ""):
             continue
 
-        stash   = get_stash_score(p)
+        stash = get_stash_score(p)
         current = base_score(p)
-        proj    = get_healthy_projected_pts(p)
+        proj = get_healthy_projected_pts(p)
         verdict = "KEEP" if stash >= STASH_SCORE_THRESHOLD else "CONSIDER DROPPING"
-        trend   = get_season_trend(p)
+        trend = get_season_trend(p)
 
         results.append({
             "name":          p.name,
@@ -3720,13 +3933,13 @@ def _get_season_intel_il_stash(league, my_team) -> list:
     These are players you might want to trade for, or monitor for waiver cuts.
     """
     my_names = {p.name for p in my_team.roster}
-    targets  = []
+    targets = []
 
     for team in league.teams:
         if team.team_name == my_team.team_name:
             continue
         for p in team.roster:
-            slot   = get_lineup_slot(p)
+            slot = get_lineup_slot(p)
             status = get_player_status(p)
             if slot not in ("IL", "IR") and status in ("ACTIVE", "NORMAL", ""):
                 continue
@@ -3768,7 +3981,7 @@ def _get_season_intel_fa_targets(league, my_team) -> list:
     for p in fa_pool:
         if p.name in rostered:
             continue
-        stash  = get_stash_score(p)
+        stash = get_stash_score(p)
         status = get_player_status(p)
         if stash < SEASON_INTEL_FA_THRESHOLD:
             continue
@@ -3820,14 +4033,19 @@ def _prefetch_all_ages(league):
     chunk_size = 200
     total_t1 = 0
     for i in range(0, len(tier1), chunk_size):
-        chunk   = tier1[i : i + chunk_size]
+        chunk = tier1[i : i + chunk_size]
         ids_str = ",".join(m for _, m in chunk)
         try:
-            url     = (f"https://statsapi.mlb.com/api/v1/people"
-                       f"?personIds={ids_str}&fields=people,id,currentAge")
-            data    = _mlb_get(url, timeout=15)
-            age_map = {str(p.get("id", "")): int(p.get("currentAge", -1))
-                       for p in data.get("people", []) if p.get("id")}
+            url = (
+                f"https://statsapi.mlb.com/api/v1/people"
+                f"?personIds={ids_str}&fields=people,id,currentAge"
+            )
+            data = _mlb_get(url, timeout=15)
+            age_map = {
+                str(p.get("id", "")): int(p.get("currentAge", -1))
+                for p in data.get("people", [])
+                if p.get("id")
+            }
             for eid, mlbam in chunk:
                 if eid:
                     _AGE_CACHE[eid] = age_map.get(mlbam, -1)
@@ -3844,14 +4062,16 @@ def _prefetch_all_ages(league):
         if not name or (eid and eid in _AGE_CACHE):
             continue
         mlbam = _mlbam_from_name(name)
-        age   = -1
+        age = -1
         if mlbam:
             try:
-                url  = (f"https://statsapi.mlb.com/api/v1/people/{mlbam}"
-                        f"?fields=people,currentAge")
+                url = (
+                    f"https://statsapi.mlb.com/api/v1/people/{mlbam}"
+                    f"?fields=people,currentAge"
+                )
                 data = _mlb_get(url, timeout=6)
-                ppl  = data.get("people", [{}])
-                age  = int(ppl[0].get("currentAge", -1)) if ppl else -1
+                ppl = data.get("people", [{}])
+                age = int(ppl[0].get("currentAge", -1)) if ppl else -1
             except Exception:
                 pass
         if eid:
@@ -3909,20 +4129,6 @@ def build_lineup_lab(league, my_team) -> dict:
         "error"        : str or None
     }
     """
-    # ── Slot definitions ────────────────────────────────────────────────────────
-    # (slot_name, count, family)
-    SLOT_ORDER = [
-        ("C",    1, "hitter"),
-        ("1B",   1, "hitter"),
-        ("2B",   1, "hitter"),
-        ("3B",   1, "hitter"),
-        ("SS",   1, "hitter"),
-        ("OF",   3, "hitter"),
-        ("UTIL", 1, "hitter"),
-        ("SP",   4, "pitcher"),
-        ("RP",   3, "pitcher"),
-    ]
-
     try:
         # ── 1. Collect all players ───────────────────────────────────────────────
         # Build ownership map: player_name → fantasy_team_name
@@ -3958,14 +4164,14 @@ def build_lineup_lab(league, my_team) -> dict:
         for name, player in all_players.items():
             proj = get_projected_pts(player)
             repl = get_replacement_level(player)
-            var  = max(0.0, proj - repl)
-            bs   = base_score(player)
+            var = max(0.0, proj - repl)
+            bs = base_score(player)
             slots = _eligible_slots(player)
             owner = ownership.get(name, "FA")
             is_fa = (owner == "FA")
             status = get_player_status(player)
-            slot   = get_lineup_slot(player)
-            on_il  = slot in ("IL", "IR") or status not in ("ACTIVE", "NORMAL", "")
+            slot = get_lineup_slot(player)
+            on_il = slot in ("IL", "IR") or status not in ("ACTIVE", "NORMAL", "")
 
             entry = {
                 "name":    name,
@@ -3981,7 +4187,7 @@ def build_lineup_lab(league, my_team) -> dict:
                 "is_sp":   is_starter_role(player),
                 "is_rp":   is_reliever_role(player),
                 "slots":   slots,
-                "initials":get_initials(name),
+                "initials": get_initials(name),
             }
 
             for s in slots:
@@ -4033,27 +4239,23 @@ def build_lineup_lab(league, my_team) -> dict:
         pos_metrics: dict[str, dict] = {}
 
         for pos in METRIC_POSITIONS:
-            pool  = pos_pool.get(pos, [])
-            repl  = MARKET["replacement_levels"].get(pos, 0.0)
+            pool = pos_pool.get(pos, [])
+            repl = MARKET["replacement_levels"].get(pos, 0.0)
             if pos == "SP" and MARKET["sp_repl"] > 0:
                 repl = MARKET["sp_repl"]
             elif pos == "RP" and MARKET["rp_repl"] > 0:
                 repl = MARKET["rp_repl"]
 
-            n_above   = sum(1 for e in pool if e["proj"] > repl and not e["on_il"])
-            n_rostered= sum(1 for e in pool if not e["is_fa"])
-            top_pts   = pool[0]["proj"] if pool else 0.0
-            top_var   = max(0.0, top_pts - repl)
+            n_above = sum(1 for e in pool if e["proj"] > repl and not e["on_il"])
+            n_rostered = sum(1 for e in pool if not e["is_fa"])
+            top_pts = pool[0]["proj"] if pool else 0.0
+            top_var = max(0.0, top_pts - repl)
             # Median pts of starters (starter = within N_TEAMS × slots slots)
             n_starters = SLOTS_PER_TEAM.get(pos, 1) * N_TEAMS
             starter_tier = [e["proj"] for e in pool[:n_starters] if not e["on_il"]]
-            avg_starter  = sum(starter_tier) / len(starter_tier) if starter_tier else 0.0
+            avg_starter = sum(starter_tier) / len(starter_tier) if starter_tier else 0.0
             # Impact score = how much the best player outperforms the average starter
             impact = round(100 * (top_pts - avg_starter) / (top_pts + 1), 1) if top_pts > 0 else 0.0
-            scarcity_mult = get_scarcity_multiplier(
-                all_players.get(pool[0]["name"])
-            ) if pool else 1.0
-
             # Top 6 for the dropdown display
             top_n = []
             for e in pool[:8]:
@@ -4117,13 +4319,13 @@ def build_lineup_lab(league, my_team) -> dict:
 
             for p in team.roster:
                 status = get_player_status(p)
-                slot   = get_lineup_slot(p)
-                on_il  = slot in ("IL", "IR") or status not in ("ACTIVE", "NORMAL", "")
+                slot = get_lineup_slot(p)
+                on_il = slot in ("IL", "IR") or status not in ("ACTIVE", "NORMAL", "")
                 if on_il:
                     continue
                 proj = get_projected_pts(p)
-                var  = max(0.0, proj - get_replacement_level(p))
-                bs   = base_score(p)
+                var = max(0.0, proj - get_replacement_level(p))
+                bs = base_score(p)
                 slots_eligible = _eligible_slots(p)
                 entry = {
                     "name":  p.name,
@@ -4144,29 +4346,31 @@ def build_lineup_lab(league, my_team) -> dict:
 
             # Build slot-level gap to optimal
             def _gap_entry(pos: str) -> dict:
-                opts     = team_by_pos.get(pos, [])
-                best     = opts[0] if opts else None
-                opt_pts  = optimal_by_pos.get(pos, 0.0)
+                opts = team_by_pos.get(pos, [])
+                best = opts[0] if opts else None
+                opt_pts = optimal_by_pos.get(pos, 0.0)
                 if best:
-                    gap_pts  = opt_pts - best["proj"]
-                    gap_pct  = round(100 * gap_pts / (opt_pts + 1), 1)
-                    grade    = ("A" if gap_pct <= 8 else
-                                "B" if gap_pct <= 20 else
-                                "C" if gap_pct <= 35 else "D")
+                    gap_pts = opt_pts - best["proj"]
+                    gap_pct = round(100 * gap_pts / (opt_pts + 1), 1)
+                    grade = (
+                        "A" if gap_pct <= 8 else
+                        "B" if gap_pct <= 20 else
+                        "C" if gap_pct <= 35 else "D"
+                    )
                 else:
-                    gap_pts  = opt_pts
-                    gap_pct  = 100.0
-                    grade    = "F"
+                    gap_pts = opt_pts
+                    gap_pct = 100.0
+                    grade = "F"
 
                 return {
-                    "name":    best["name"] if best else "—",
-                    "mlb":     best["mlb"]  if best else "",
-                    "proj":    round(best["proj"], 0) if best else 0,
-                    "var":     round(best["var"],  0) if best else 0,
-                    "base":    round(best["base"],  1) if best else 0,
+                    "name": best["name"] if best else "—",
+                    "mlb": best["mlb"] if best else "",
+                    "proj": round(best["proj"], 0) if best else 0,
+                    "var": round(best["var"], 0) if best else 0,
+                    "base": round(best["base"], 1) if best else 0,
                     "gap_pts": round(gap_pts, 0),
                     "gap_pct": gap_pct,
-                    "grade":   grade,
+                    "grade": grade,
                     # Who is the league-optimal player at this slot?
                     # Use pos_pool (league-wide), NOT opts (team-specific — may be empty)
                     "opt_name": pos_pool[pos][0]["name"] if pos_pool.get(pos) else "—",
@@ -4180,7 +4384,7 @@ def build_lineup_lab(league, my_team) -> dict:
             # Add 3 OF instead of 1 (total_proj_full accounts for all 3 OF slots)
             of_pts = sum(e["proj"] for e in team_by_pos.get("OF", [])[:3])
             total_proj_full = (
-                (team_by_pos.get("C",  [{}])[0].get("proj", 0) if team_by_pos.get("C")  else 0) +
+                (team_by_pos.get("C",  [{}])[0].get("proj", 0) if team_by_pos.get("C") else 0) +
                 (team_by_pos.get("1B", [{}])[0].get("proj", 0) if team_by_pos.get("1B") else 0) +
                 (team_by_pos.get("2B", [{}])[0].get("proj", 0) if team_by_pos.get("2B") else 0) +
                 (team_by_pos.get("3B", [{}])[0].get("proj", 0) if team_by_pos.get("3B") else 0) +
@@ -4235,36 +4439,32 @@ def build_lineup_lab(league, my_team) -> dict:
         #   IP = 3 vs 1 → workhouse SPs undervalued
         #   ER = -2 vs -1 → clean ERA SPs worth more here
         #   TB = 1 → contact hitters / high-AVG players gain vs sluggers
-        ESPN_STD_K_HITTER   = 0    # standard ESPN: K is neutral for hitters
-        ESPN_STD_HD         = 1    # standard ESPN: 1 pt per hold
-        ESPN_STD_IP         = 1    # standard ESPN: ~1 pt per IP
-        ESPN_STD_ER         = -1   # standard ESPN: -1 per ER
-        LEAGUE_K_HITTER     = PITCHING_SCORING.get("K",  1)  # K=1 for pitchers
-        LEAGUE_BATTER_K     = BATTING_SCORING.get("K", -1)   # K=-1 for batters
-        LEAGUE_HD           = PITCHING_SCORING.get("HD", 5) + PITCHING_SCORING.get("SVHD", 2)
-        LEAGUE_IP           = PITCHING_SCORING.get("IP", 3)
-        LEAGUE_ER           = PITCHING_SCORING.get("ER", -2)
-        TYPICAL_HD_PER_FULL_SEASON  = 30   # benchmark: high-hold setup man
-        TYPICAL_IP_PER_GS_ELITE     = 6.5  # benchmark: elite workhorse
-        TYPICAL_IP_PER_GS_AVERAGE   = 5.5  # benchmark: average SP
-        TYPICAL_PA_PER_SEASON       = 520
+        ESPN_STD_K_HITTER = 0  # standard ESPN: K is neutral for hitters
+        ESPN_STD_HD = 1  # standard ESPN: 1 pt per hold
+        ESPN_STD_IP = 1  # standard ESPN: ~1 pt per IP
+        ESPN_STD_ER = -1  # standard ESPN: -1 per ER
+        LEAGUE_BATTER_K = BATTING_SCORING.get("K", -1)  # K=-1 for batters
+        LEAGUE_HD = PITCHING_SCORING.get("HD", 5) + PITCHING_SCORING.get("SVHD", 2)
+        LEAGUE_IP = PITCHING_SCORING.get("IP", 3)
+        LEAGUE_ER = PITCHING_SCORING.get("ER", -2)
+        TYPICAL_IP_PER_GS_AVERAGE = 5.5  # benchmark: average SP
+        TYPICAL_PA_PER_SEASON = 520
 
         def _format_advantage(player) -> dict:
             """
             Return this-league format-edge pts + reason for a player.
             Positive = undervalued by managers using standard ESPN thinking.
             """
-            ref  = get_reference_metrics(player)
-            sc   = get_statcast_metrics(player)
-            adv_pts  = 0.0
-            reasons  = []
+            ref = get_reference_metrics(player)
+            adv_pts = 0.0
+            reasons = []
             category = "STANDARD"
 
             if is_pitcher(player):
-                hd  = get_metric(ref, "HD", "HLD")
-                ip  = get_metric(ref, "IP")
-                gs  = get_metric(ref, "GS")
-                er  = get_metric(ref, "ER")
+                hd = get_metric(ref, "HD", "HLD")
+                ip = get_metric(ref, "IP")
+                gs = get_metric(ref, "GS")
+                er = get_metric(ref, "ER")
                 avg_ip_per_start = ip / gs if gs > 0 else 0.0
 
                 # HOLDS EDGE — the single biggest format advantage
@@ -4303,21 +4503,20 @@ def build_lineup_lab(league, my_team) -> dict:
 
             else:  # hitter
                 kpct = get_metric(ref, "Kp", "K%")   # cache key is "Kp"; "K%" alias for safety
-                pa   = get_metric(ref, "PA") or TYPICAL_PA_PER_SEASON
-                so   = get_metric(ref, "SO", "K")
-                h    = get_metric(ref, "H")
-                avg  = get_metric(ref, "AVG")
-                iso  = get_metric(ref, "ISO")
-                tb   = get_metric(ref, "TB")
-                bb   = get_metric(ref, "BBp", "BB%")  # cache key is "BBp"; "BB%" alias for safety
+                pa = get_metric(ref, "PA") or TYPICAL_PA_PER_SEASON
+                so = get_metric(ref, "SO", "K")
+                h = get_metric(ref, "H")
+                avg = get_metric(ref, "AVG")
+                iso = get_metric(ref, "ISO")
+                tb = get_metric(ref, "TB")
 
                 # LOW-K HITTER — other managers don't price K=-1
                 if kpct > 0 and kpct < 0.18 and so >= 20:
                     # League avg K% ≈ 22%. This player's K saving vs avg:
-                    avg_kpct   = 0.22
-                    saved_ks   = max(0.0, (avg_kpct - kpct) * pa)
-                    k_adv      = saved_ks * abs(LEAGUE_BATTER_K - ESPN_STD_K_HITTER)
-                    adv_pts   += k_adv
+                    avg_kpct = 0.22
+                    saved_ks = max(0.0, (avg_kpct - kpct) * pa)
+                    k_adv = saved_ks * abs(LEAGUE_BATTER_K - ESPN_STD_K_HITTER)
+                    adv_pts += k_adv
                     reasons.append(
                         f"{kpct*100:.0f}% K-rate vs 22% avg → saves ~{int(saved_ks)} "
                         f"Ks/yr × 1pt = +{round(k_adv):,} pts vs ESPN valuation"
@@ -4325,10 +4524,10 @@ def build_lineup_lab(league, my_team) -> dict:
                     category = "LOW_K_HITTER"
                 elif kpct >= 0.28 and so >= 50:
                     # High-K hitter — DISADVANTAGE (I want to sell these)
-                    avg_kpct  = 0.22
-                    extra_ks  = max(0.0, (kpct - avg_kpct) * pa)
+                    avg_kpct = 0.22
+                    extra_ks = max(0.0, (kpct - avg_kpct) * pa)
                     k_penalty = extra_ks * abs(LEAGUE_BATTER_K - ESPN_STD_K_HITTER)
-                    adv_pts  -= k_penalty
+                    adv_pts -= k_penalty
                     reasons.append(
                         f"{kpct*100:.0f}% K-rate → {int(extra_ks)} extra Ks/yr "
                         f"× 1pt penalty = −{round(k_penalty):,} pts vs ESPN valuation"
@@ -4382,11 +4581,11 @@ def build_lineup_lab(league, my_team) -> dict:
             if slot_s in ("IL", "IR"):
                 continue
             espn_p = as_float(safe_get(p, "projected_total_points", default=0))
-            our_p  = get_model_projected_pts(p)
+            our_p = get_model_projected_pts(p)
             if espn_p < 20 or our_p < 20:
                 continue
-            gap_s  = espn_p - our_p   # positive = ESPN overvalues = I can sell
-            fa_s   = _format_advantage(p)
+            gap_s = espn_p - our_p   # positive = ESPN overvalues = I can sell
+            fa_s = _format_advantage(p)
             # Add to sell list if ESPN overvalues OR format disadvantages them
             if gap_s >= 15 or fa_s["adv_pts"] <= -30:
                 my_sell_candidates.append({
@@ -4411,14 +4610,14 @@ def build_lineup_lab(league, my_team) -> dict:
             if MY_TEAM_NAME.lower() in team.team_name.lower():
                 continue
             for player in team.roster:
-                pslot  = get_lineup_slot(player)
+                pslot = get_lineup_slot(player)
                 if pslot in ("IL", "IR"):
                     continue
                 status = get_player_status(player)
                 if status not in ("ACTIVE", "NORMAL", ""):
                     continue
 
-                our_proj  = get_model_projected_pts(player)
+                our_proj = get_model_projected_pts(player)
                 espn_proj = as_float(safe_get(player, "projected_total_points", default=0))
                 if our_proj < 30 and espn_proj < 30:
                     continue
@@ -4464,34 +4663,46 @@ def build_lineup_lab(league, my_team) -> dict:
 
         trade_targets_raw.sort(key=lambda r: -r["priority"])
         # Separate by category for display
-        holds_targets   = [t for t in trade_targets_raw if t["category"] == "HOLDS_EDGE"][:6]
-        lowk_targets    = [t for t in trade_targets_raw if t["category"] == "LOW_K_HITTER"][:5]
-        workhorse_targets=[t for t in trade_targets_raw if t["category"] == "WORKHORSE_SP"][:4]
-        other_targets   = [t for t in trade_targets_raw
-                           if t["category"] not in ("HOLDS_EDGE","LOW_K_HITTER",
-                                                     "WORKHORSE_SP","HIGH_K_AVOID")][:3]
-        avoid_targets   = [t for t in trade_targets_raw if t["category"] == "HIGH_K_AVOID"][:4]
+        holds_targets = [t for t in trade_targets_raw if t["category"] == "HOLDS_EDGE"][:6]
+        lowk_targets = [t for t in trade_targets_raw if t["category"] == "LOW_K_HITTER"][:5]
+        workhorse_targets = [t for t in trade_targets_raw if t["category"] == "WORKHORSE_SP"][:4]
+        other_targets = [
+            t for t in trade_targets_raw
+            if t["category"] not in ("HOLDS_EDGE", "LOW_K_HITTER", "WORKHORSE_SP", "HIGH_K_AVOID")
+        ][:3]
+        avoid_targets = [t for t in trade_targets_raw if t["category"] == "HIGH_K_AVOID"][:4]
 
         lab_trade_data = {
             "holds_targets":    holds_targets,
             "lowk_targets":     lowk_targets,
-            "workhorse_targets":workhorse_targets,
+            "workhorse_targets": workhorse_targets,
             "other_targets":    other_targets,
             "avoid_targets":    avoid_targets,
             "sell_candidates":  my_sell_candidates[:8],
             "category_explainers": {
-                "HOLDS_EDGE":   f"Hold = {LEAGUE_HD} pts here vs ~{ESPN_STD_HD} pts in standard ESPN. "
-                                f"Other managers price setup men as if holds are worthless.",
-                "LOW_K_HITTER": f"K = −1 pt here vs 0 in standard ESPN. "
-                                f"Each avoided strikeout saves a real point. "
-                                f"Power sluggers with 28%+ K rates are disasters in this format.",
-                "WORKHORSE_SP": f"IP = {LEAGUE_IP} pts here vs ~{ESPN_STD_IP} in standard ESPN. "
-                                f"A pitcher who averages 7 IP/start earns {round((7-5.5)*(LEAGUE_IP-ESPN_STD_IP)*30):,} "
-                                f"extra pts/season vs a 5.5-IP guy. Other managers value W/ERA, not IP.",
-                "CONTACT_TB":   f"TB = 1 pt per base. Singles count. "
-                                f"High-AVG contact hitters outperform their ESPN ranking in this format.",
-                "CLEAN_ERA_SP": f"ER = {abs(LEAGUE_ER)} pts here vs {abs(ESPN_STD_ER)} in standard. "
-                                f"Doubly penalised — clean-ERA SPs are worth more than their record suggests.",
+                "HOLDS_EDGE": (
+                    f"Hold = {LEAGUE_HD} pts here vs ~{ESPN_STD_HD} pts in standard ESPN. "
+                    "Other managers price setup men as if holds are worthless."
+                ),
+                "LOW_K_HITTER": (
+                    "K = −1 pt here vs 0 in standard ESPN. "
+                    "Each avoided strikeout saves a real point. "
+                    "Power sluggers with 28%+ K rates are disasters in this format."
+                ),
+                "WORKHORSE_SP": (
+                    f"IP = {LEAGUE_IP} pts here vs ~{ESPN_STD_IP} in standard ESPN. "
+                    f"A pitcher who averages 7 IP/start earns "
+                    f"{round((7 - 5.5) * (LEAGUE_IP - ESPN_STD_IP) * 30):,} "
+                    "extra pts/season vs a 5.5-IP guy. Other managers value W/ERA, not IP."
+                ),
+                "CONTACT_TB": (
+                    "TB = 1 pt per base. Singles count. "
+                    "High-AVG contact hitters outperform their ESPN ranking in this format."
+                ),
+                "CLEAN_ERA_SP": (
+                    f"ER = {abs(LEAGUE_ER)} pts here vs {abs(ESPN_STD_ER)} in standard. "
+                    "Doubly penalised — clean-ERA SPs are worth more than their record suggests."
+                ),
             },
         }
 
@@ -4501,7 +4712,7 @@ def build_lineup_lab(league, my_team) -> dict:
             "team_lineups":     team_lineups,
             "all_team_names":   all_team_names,
             "my_team_name":     MY_TEAM_NAME,
-            "league_above_repl":league_above_repl,
+            "league_above_repl": league_above_repl,
             "lab_trades":       lab_trade_data,
             "error":            None,
         }
@@ -4510,14 +4721,14 @@ def build_lineup_lab(league, my_team) -> dict:
         import traceback
         traceback.print_exc()
         return {
-            "optimal":          [],
-            "pos_metrics":      {},
-            "team_lineups":     {},
-            "all_team_names":   [],
-            "my_team_name":     MY_TEAM_NAME,
-            "league_above_repl":{},
-            "lab_trades":       {},
-            "error":            str(exc),
+            "optimal": [],
+            "pos_metrics": {},
+            "team_lineups": {},
+            "all_team_names": [],
+            "my_team_name": MY_TEAM_NAME,
+            "league_above_repl": {},
+            "lab_trades": {},
+            "error": str(exc),
         }
 
 
@@ -4536,11 +4747,11 @@ def build_trade_value_comparison(league, my_team) -> dict:
       pct_owned, age, age_tier, headshot, headshot2, initials,
       is_pitcher, adv, mlbam_id, espn_id
     """
-    MIN_PROJ        = 20.0   # skip players with too-low projections (small sample)
-    BUY_THRESHOLD   = 20.0   # our model values the player 20+ pts more than ESPN
-    SELL_THRESHOLD  = 20.0   # ESPN values the player 20+ pts more than our model
-    MAX_BUY         = 25     # return top N buy targets
-    MAX_SELL        = 15     # return top N sell-high candidates
+    MIN_PROJ = 20.0   # skip players with too-low projections (small sample)
+    BUY_THRESHOLD = 20.0   # our model values the player 20+ pts more than ESPN
+    SELL_THRESHOLD = 20.0   # ESPN values the player 20+ pts more than our model
+    MAX_BUY = 25     # return top N buy targets
+    MAX_SELL = 15     # return top N sell-high candidates
 
     my_name_lc = MY_TEAM_NAME.lower()
     buy_targets: list = []
@@ -4554,17 +4765,17 @@ def build_trade_value_comparison(league, my_team) -> dict:
                 continue                      # skip injured players — distorts projection
 
             espn_proj = as_float(safe_get(player, "projected_total_points", default=0))
-            our_proj  = get_model_projected_pts(player)
+            our_proj = get_model_projected_pts(player)
 
             # Only compare when both sides have meaningful data
             if espn_proj < MIN_PROJ or our_proj < MIN_PROJ:
                 continue
 
-            gap     = round(our_proj  - espn_proj, 1)   # positive = we value more
+            gap = round(our_proj - espn_proj, 1)   # positive = we value more
             gap_pct = round(gap / espn_proj * 100, 1) if espn_proj else 0.0
 
             _age = _fetch_player_age(player)
-            _at  = age_tier(_age)
+            _at = age_tier(_age)
 
             row = {
                 "player":       player.name,
@@ -4613,7 +4824,6 @@ def _load_fp_actual_cache() -> None:
     Called once at the start of build_fp_actual_cache().
     """
     import time as _time
-    global _FP_ACTUAL_CACHE
     if not os.path.exists(_FP_ACTUAL_CACHE_PATH):
         return
     try:
@@ -4733,8 +4943,6 @@ def build_fp_actual_cache(players) -> None:
 
     The cache file has a 30-minute TTL — older files are ignored and rebuilt.
     """
-    global _FP_ACTUAL_CACHE
-
     # Load existing cache (only if fresh and non-trivially populated)
     _load_fp_actual_cache()
 
@@ -4772,11 +4980,11 @@ def get_actual_season_pts(player) -> float:
     return _compute_fp_for_player(player)
 
 
-_HITTER_SEASON_GP   = 162   # full MLB schedule
-_SP_SEASON_GS       = 32    # typical SP: 30-34 starts
-_RP_SEASON_G        = 65    # typical RP: 60-70 appearances
-_PA_PER_GAME        = 3.85  # MLB avg PA per game per hitter
-_AB_PER_GAME        = 3.28  # MLB avg AB per game per hitter (excludes walks/HBP/sacs)
+_HITTER_SEASON_GP = 162   # full MLB schedule
+_SP_SEASON_GS = 32    # typical SP: 30-34 starts
+_RP_SEASON_G = 65    # typical RP: 60-70 appearances
+_PA_PER_GAME = 3.85  # MLB avg PA per game per hitter
+_AB_PER_GAME = 3.28  # MLB avg AB per game per hitter (excludes walks/HBP/sacs)
 
 
 def _projected_total_gp(player) -> float:
@@ -4789,7 +4997,7 @@ def _projected_total_gp(player) -> float:
     RP       → projected G (appearances) via IP ÷ 1.05
     """
     proj = get_projection_metrics(player)
-    ref  = get_reference_metrics(player)
+    ref = get_reference_metrics(player)
 
     if is_pitcher(player):
         sp_role = is_starter_role(player)
@@ -4800,12 +5008,12 @@ def _projected_total_gp(player) -> float:
         else:
             # RP: projected appearances ≈ IP / 1.05
             ip = as_float((proj or {}).get("IP") or (ref or {}).get("IP") or 0)
-            g  = round(ip / 1.05) if ip >= 10 else 0
+            g = round(ip / 1.05) if ip >= 10 else 0
             return g if g >= 20 else _RP_SEASON_G
     else:
         # Hitter: PA ÷ PA-per-game
         pa = as_float((proj or {}).get("PA") or (ref or {}).get("PA") or 0)
-        g  = round(pa / _PA_PER_GAME) if pa >= 50 else 0
+        g = round(pa / _PA_PER_GAME) if pa >= 50 else 0
         return g if g >= 50 else _HITTER_SEASON_GP
 
 
@@ -4909,11 +5117,11 @@ def get_season_pace_data(player, current_week: int, total_weeks: int = 26) -> di
     This is more stable than avg×weeks because it accounts for how many games
     a player has left: a hitter in 50 games projects differently from one in 155.
     """
-    slot   = get_lineup_slot(player)
+    slot = get_lineup_slot(player)
     status = get_player_status(player)
-    on_il  = slot in ("IL", "IR") or status not in ("ACTIVE", "NORMAL", "")
+    on_il = slot in ("IL", "IR") or status not in ("ACTIVE", "NORMAL", "")
 
-    actual_pts   = _compute_fp_for_player(player)
+    actual_pts = _compute_fp_for_player(player)
     avg_per_week = as_float(safe_get(player, "avg_points", default=0))
 
     # If actual_pts is still 0 reconstruct from avg × calendar weeks as proxy
@@ -4922,23 +5130,23 @@ def get_season_pace_data(player, current_week: int, total_weeks: int = 26) -> di
         actual_pts = round(avg_per_week * weeks_elapsed, 1)
 
     # Games played and projected total — the core of the new pace formula
-    gp_so_far   = _games_played_so_far(player, current_week)
+    gp_so_far = _games_played_so_far(player, current_week)
     proj_total_gp = _projected_total_gp(player)
 
     # pace = (FP per game so far) × (projected total games)
     if actual_pts > 0 and gp_so_far > 0:
         fp_per_gp = actual_pts / gp_so_far
-        pace_pts  = round(fp_per_gp * proj_total_gp, 1)
+        pace_pts = round(fp_per_gp * proj_total_gp, 1)
     elif avg_per_week > 0:
         # Fall back to avg × weeks if we have no game-level data at all
         pace_pts = round(avg_per_week * total_weeks, 1)
     else:
         pace_pts = 0.0
 
-    fdb_proj  = round(get_projected_pts(player), 1)
+    fdb_proj = round(get_projected_pts(player), 1)
     espn_proj = round(as_float(safe_get(player, "projected_total_points", default=0)), 1)
-    pos       = ", ".join(get_player_slots(player)[:2])
-    is_p      = is_pitcher(player)
+    pos = ", ".join(get_player_slots(player)[:2])
+    is_p = is_pitcher(player)
 
     return {
         "player":         player.name,
@@ -4978,21 +5186,21 @@ def build_season_pace_payload(league, current_week: int, total_weeks: int = 26) 
     from datetime import datetime as _dt
 
     weeks_remaining = max(0, total_weeks - current_week + 1)
-    my_team_name    = MY_TEAM_NAME.lower()
-    my_rows         = []
-    all_teams       = []
+    my_team_name = MY_TEAM_NAME.lower()
+    my_rows = []
+    all_teams = []
 
     for team in league.teams:
         is_mine = my_team_name in team.team_name.lower()
-        rows    = []
+        rows = []
         for p in team.roster:
             row = get_season_pace_data(p, current_week, total_weeks)
             rows.append(row)
         # Sort: active players by pace_pts desc, then IL
         rows.sort(key=lambda r: (r["on_il"], -r["pace_pts"]))
         team_actual = round(sum(r["actual_pts"] for r in rows if not r["on_il"]), 1)
-        team_pace   = round(sum(r["pace_pts"]   for r in rows if not r["on_il"]), 1)
-        team_fdb    = round(sum(r["fdb_proj"]   for r in rows if not r["on_il"]), 1)
+        team_pace = round(sum(r["pace_pts"] for r in rows if not r["on_il"]), 1)
+        team_fdb = round(sum(r["fdb_proj"] for r in rows if not r["on_il"]), 1)
         all_teams.append({
             "team_name":     team.team_name,
             "is_mine":       is_mine,
@@ -5022,6 +5230,7 @@ def build_season_pace_payload(league, current_week: int, total_weeks: int = 26) 
 
 _DAILY_SCORES_PATH = os.path.join(SCRIPT_DIR, "daily_matchup_cache.json")
 
+
 def _load_daily_scores_cache() -> dict:
     """Load the persisted day-by-day scoring cache. {week_str: {player_name: {day_abbr: pts}}}"""
     if not os.path.exists(_DAILY_SCORES_PATH):
@@ -5032,12 +5241,14 @@ def _load_daily_scores_cache() -> dict:
     except Exception:
         return {}
 
+
 def _save_daily_scores_cache(data: dict) -> None:
     try:
         with open(_DAILY_SCORES_PATH, "w", encoding="utf-8") as f:
             json.dump(data, f, separators=(",", ":"))
     except Exception as e:
         print(f"  Warning: daily scores cache save failed: {e}")
+
 
 def get_week_scoring_by_day(league, my_team) -> dict:
     """
@@ -5070,20 +5281,20 @@ def get_week_scoring_by_day(league, my_team) -> dict:
         today_idx = today.weekday()          # 0 = Mon
         today_day = day_names[today_idx]
 
-        is_home   = (me.team_name == getattr(matchup.home_team, "team_name", ""))
-        my_lineup  = getattr(matchup, "home_lineup"  if is_home else "away_lineup",  [])
-        opp_lineup = getattr(matchup, "away_lineup"  if is_home else "home_lineup",  [])
+        is_home = (me.team_name == getattr(matchup.home_team, "team_name", ""))
+        my_lineup = getattr(matchup, "home_lineup" if is_home else "away_lineup",  [])
+        opp_lineup = getattr(matchup, "away_lineup" if is_home else "home_lineup",  [])
 
-        cache     = _load_daily_scores_cache()
-        week_key  = str(week)
+        cache = _load_daily_scores_cache()
+        week_key = str(week)
         week_cache = cache.get(week_key, {})
 
         def _build_rows(lineup, side_cache):
             rows = []
             for bp in lineup:
-                slot      = getattr(bp, "slot_position", "") or ""
+                slot = getattr(bp, "slot_position", "") or ""
                 pts_total = as_float(getattr(bp, "points", 0))
-                proj      = as_float(getattr(bp, "projected_points", 0))
+                proj = as_float(getattr(bp, "projected_points", 0))
                 # player name
                 _pl = getattr(bp, "player", None)
                 name = (getattr(_pl, "name", "") if _pl else "") or getattr(bp, "name", "") or ""
@@ -5093,7 +5304,7 @@ def get_week_scoring_by_day(league, my_team) -> dict:
                 player_cache = side_cache.get(name, {})
                 # today's pts = cumulative minus all previously cached days
                 prev_total = sum(player_cache.get(d, 0.0) for d in day_names[:today_idx])
-                today_pts  = max(0.0, round(pts_total - prev_total, 2))
+                today_pts = max(0.0, round(pts_total - prev_total, 2))
 
                 days = {}
                 for i, d in enumerate(day_names):
@@ -5121,10 +5332,10 @@ def get_week_scoring_by_day(league, my_team) -> dict:
             return rows
 
         # We store my/opp separately under "my"/"opp" sub-keys
-        my_cache  = week_cache.get("my",  {})
+        my_cache = week_cache.get("my",  {})
         opp_cache = week_cache.get("opp", {})
-        my_rows   = _build_rows(my_lineup,  my_cache)
-        opp_rows  = _build_rows(opp_lineup, opp_cache)
+        my_rows = _build_rows(my_lineup,  my_cache)
+        opp_rows = _build_rows(opp_lineup, opp_cache)
 
         # Persist
         cache[week_key] = {"my": my_cache, "opp": opp_cache}
@@ -5132,7 +5343,7 @@ def get_week_scoring_by_day(league, my_team) -> dict:
             del cache[k]
         _save_daily_scores_cache(cache)
 
-        my_total  = round(sum(r["total"] for r in my_rows  if not r["is_bench"]), 2)
+        my_total = round(sum(r["total"] for r in my_rows if not r["is_bench"]), 2)
         opp_total = round(sum(r["total"] for r in opp_rows if not r["is_bench"]), 2)
 
         return {
@@ -5152,6 +5363,7 @@ def get_week_scoring_by_day(league, my_team) -> dict:
 # ═══════════════════════════════════════════════════════════════════
 # P2 — OPTIMAL ROSTER BLUEPRINT
 # ═══════════════════════════════════════════════════════════════════
+
 
 def compute_optimal_roster_blueprint(league, my_team) -> dict:
     """
@@ -5193,7 +5405,7 @@ def compute_optimal_roster_blueprint(league, my_team) -> dict:
         _pos_caps = {k: SLOTS_PER_TEAM.get(k, 1) for k in
                      ("C", "1B", "2B", "3B", "SS", "OF", "SP", "RP")}
         for p in my_roster:
-            slot  = get_lineup_slot(p)
+            slot = get_lineup_slot(p)
             slots = get_player_slots(p)
             if slot in ("IL", "IR"):
                 current["IL"] += 1
@@ -5221,8 +5433,8 @@ def compute_optimal_roster_blueprint(league, my_team) -> dict:
                 if current["RP"] < _pos_caps["RP"]:
                     current["RP"] += 1
                     ref = get_reference_metrics(p)
-                    sv  = get_metric(ref, "SV") if ref else 0
-                    hd  = get_metric(ref, "HD", "HLD") if ref else 0
+                    sv = get_metric(ref, "SV") if ref else 0
+                    hd = get_metric(ref, "HD", "HLD") if ref else 0
                     if sv >= 20:
                         current["elite_closer"] += 1
                     elif hd >= 15 or sv >= 5:
@@ -5291,6 +5503,7 @@ def compute_optimal_roster_blueprint(league, my_team) -> dict:
 # slot conflict detection, and combined ratio-risk flags.
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def _fetch_weekly_game_details(week_start: str, week_end: str) -> dict:
     """
     Pull per-game context for every probable starter this week.
@@ -5312,10 +5525,10 @@ def _fetch_weekly_game_details(week_start: str, week_end: str) -> dict:
             game_date = date_block.get("date", "")
             for game in date_block.get("games", []):
                 teams_data = game.get("teams", {})
-                home_abbr  = teams_data.get("home", {}).get("team", {}).get("abbreviation", "")
-                away_abbr  = teams_data.get("away", {}).get("team", {}).get("abbreviation", "")
+                home_abbr = teams_data.get("home", {}).get("team", {}).get("abbreviation", "")
+                away_abbr = teams_data.get("away", {}).get("team", {}).get("abbreviation", "")
                 for side, is_home in (("home", True), ("away", False)):
-                    pp  = teams_data.get(side, {}).get("probablePitcher", {})
+                    pp = teams_data.get(side, {}).get("probablePitcher", {})
                     pid = str(pp.get("id", ""))
                     if not pid:
                         continue
@@ -5351,9 +5564,9 @@ def _get_team_batting_profiles() -> dict:
         if not team or len(team) > 4:
             continue
         k_pct = get_metric(row, "K%", "Kp")
-        woba  = get_metric(row, "wOBA")
-        ops   = get_metric(row, "OPS")
-        pa    = get_metric(row, "PA", default=1.0)
+        woba = get_metric(row, "wOBA")
+        ops = get_metric(row, "OPS")
+        pa = get_metric(row, "PA", default=1.0)
         if pa < 50:  # skip tiny samples
             continue
         if team not in accum:
@@ -5361,18 +5574,18 @@ def _get_team_batting_profiles() -> dict:
                            "pa_sum": 0.0, "n": 0}
         w = pa  # weight by PA
         accum[team]["k_pct_sum"] += k_pct * w
-        accum[team]["woba_sum"]  += woba  * w
-        accum[team]["ops_sum"]   += ops   * w
-        accum[team]["pa_sum"]    += w
-        accum[team]["n"]         += 1
+        accum[team]["woba_sum"] += woba * w
+        accum[team]["ops_sum"] += ops * w
+        accum[team]["pa_sum"] += w
+        accum[team]["n"] += 1
 
     for team, a in accum.items():
         pa_sum = max(a["pa_sum"], 1)
         profiles[team] = {
             "k_pct": round(a["k_pct_sum"] / pa_sum, 4),
-            "woba":  round(a["woba_sum"]  / pa_sum, 4),
-            "ops":   round(a["ops_sum"]   / pa_sum, 4),
-            "n":     a["n"],
+            "woba": round(a["woba_sum"] / pa_sum, 4),
+            "ops": round(a["ops_sum"] / pa_sum, 4),
+            "n": a["n"],
         }
     return profiles
 
@@ -5400,22 +5613,22 @@ def score_start_matchup(opp_abbr: str, home_abbr: str, is_home: bool) -> dict:
     if not _TEAM_BATTING_PROFILES:
         _TEAM_BATTING_PROFILES = _get_team_batting_profiles()
 
-    park_factor  = get_park_factor(home_abbr)
-    opp_profile  = _TEAM_BATTING_PROFILES.get(opp_abbr.upper(), {})
-    opp_k_pct    = opp_profile.get("k_pct", 0.220)   # fallback: league-avg ~22%
-    opp_woba     = opp_profile.get("woba",  0.318)   # fallback: league-avg ~.318
+    park_factor = get_park_factor(home_abbr)
+    opp_profile = _TEAM_BATTING_PROFILES.get(opp_abbr.upper(), {})
+    opp_k_pct = opp_profile.get("k_pct", 0.220)   # fallback: league-avg ~22%
+    opp_woba = opp_profile.get("woba", 0.318)  # fallback: league-avg ~.318
 
     # K% component: 30 pts at 28%+ K rate (elite), 0 pts at 15% or below
-    k_pts   = max(0.0, min(30.0, (opp_k_pct - 0.15) / (0.28 - 0.15) * 30.0))
+    k_pts = max(0.0, min(30.0, (opp_k_pct - 0.15) / (0.28 - 0.15) * 30.0))
     # wOBA component: 35 pts at .280 wOBA or below, 0 pts at .360 or above
-    w_pts   = max(0.0, min(35.0, (.360 - opp_woba)  / (.360 - .280) * 35.0))
+    w_pts = max(0.0, min(35.0, (.360 - opp_woba) / (.360 - .280) * 35.0))
     # Park factor component: 20 pts at pf=0.85, 0 pts at pf=1.15
-    pf_pts  = max(0.0, min(20.0, (1.15 - park_factor) / (1.15 - 0.85) * 20.0))
+    pf_pts = max(0.0, min(20.0, (1.15 - park_factor) / (1.15 - 0.85) * 20.0))
     # Home advantage
     home_pts = 5.0 if is_home else 0.0
 
     raw_score = k_pts + w_pts + pf_pts + home_pts
-    score     = int(round(min(100.0, raw_score)))
+    score = int(round(min(100.0, raw_score)))
 
     if score >= 80:
         grade, color = "A", "var(--accent)"
@@ -5483,7 +5696,7 @@ def build_weekly_streaming_plan(league, my_team, week_start: str, week_end: str)
 
         pitchers_out = []
         total_proj_ip = 0.0
-        total_proj_k  = 0.0
+        total_proj_k = 0.0
         ratio_risk_names = []
 
         for player in sorted(my_team.roster, key=lambda p: -get_projected_pts(p)):
@@ -5491,18 +5704,17 @@ def build_weekly_streaming_plan(league, my_team, week_start: str, week_end: str)
                 continue
 
             mlbam = get_mlbam_id(player)
-            ref   = get_reference_metrics(player)
-            sc    = get_statcast_metrics(player)
+            ref = get_reference_metrics(player)
             slots = get_player_slots(player)
-            pos   = get_lineup_slot(player)
+            pos = get_lineup_slot(player)
 
             # --- Per-pitcher metrics ---
             siera = get_metric(ref, "SIERA") if ref else 0.0
-            xfip  = get_metric(ref, "xFIP")  if ref else 0.0
-            era   = get_metric(ref, "ERA")    if ref else 0.0
-            whip  = get_metric(ref, "WHIP")   if ref else 0.0
-            ip_ref = get_metric(ref, "IP")    if ref else 0.0
-            k9    = get_metric(ref, "K/9", "SO9") if ref else 0.0
+            xfip = get_metric(ref, "xFIP") if ref else 0.0
+            era = get_metric(ref, "ERA") if ref else 0.0
+            whip = get_metric(ref, "WHIP") if ref else 0.0
+            ip_ref = get_metric(ref, "IP") if ref else 0.0
+            k9 = get_metric(ref, "K/9", "SO9") if ref else 0.0
             era_est = siera or xfip or era or 0.0
             xfip_val = xfip or siera or era or 0.0
 
@@ -5514,13 +5726,13 @@ def build_weekly_streaming_plan(league, my_team, week_start: str, week_end: str)
             starts_out = []
             for start in pitcher_starts:
                 mq = score_start_matchup(
-                    opp_abbr  = start["opp_abbr"],
-                    home_abbr = start["home_abbr"],
-                    is_home   = start["is_home"],
+                    opp_abbr=start["opp_abbr"],
+                    home_abbr=start["home_abbr"],
+                    is_home=start["is_home"],
                 )
                 # Per-start projected IP (reference IP / 30 starts as per-start rate)
                 per_start_ip = (ip_ref / 30.0) if ip_ref > 0 else 5.5
-                per_start_k  = per_start_ip * (k9 / 9.0) if k9 > 0 else per_start_ip * 0.9
+                per_start_k = per_start_ip * (k9 / 9.0) if k9 > 0 else per_start_ip * 0.9
                 starts_out.append({
                     "date":          start["date"],
                     "opp_abbr":      start["opp_abbr"],
@@ -5540,16 +5752,16 @@ def build_weekly_streaming_plan(league, my_team, week_start: str, week_end: str)
 
             # Combined matchup flag across all starts
             if n_starts == 0:
-                combined_flag  = "no-starts"
+                combined_flag = "no-starts"
                 combined_label = "No starts"
             elif n_starts == 1:
                 g = starts_out[0]["matchup_grade"]
-                combined_flag  = "single"
+                combined_flag = "single"
                 combined_label = f"1 start · {g}"
             else:
                 grades = [s["matchup_grade"] for s in starts_out]
-                best   = min(grades, key=lambda g: "ABCDF".index(g))
-                worst  = max(grades, key=lambda g: "ABCDF".index(g))
+                best = min(grades, key=lambda g: "ABCDF".index(g))
+                worst = max(grades, key=lambda g: "ABCDF".index(g))
                 if worst in ("A", "B"):
                     combined_flag = "both-strong"
                 elif best in ("D", "F"):
@@ -5560,9 +5772,9 @@ def build_weekly_streaming_plan(league, my_team, week_start: str, week_end: str)
 
             # IP and K projections
             pitcher_proj_ip = sum(s["proj_ip"] for s in starts_out)
-            pitcher_proj_k  = sum(s["proj_k"]  for s in starts_out)
-            total_proj_ip  += pitcher_proj_ip
-            total_proj_k   += pitcher_proj_k
+            pitcher_proj_k = sum(s["proj_k"] for s in starts_out)
+            total_proj_ip += pitcher_proj_ip
+            total_proj_k += pitcher_proj_k
 
             # Ratio risk: xFIP > 4.80 or WHIP > 1.45
             has_ratio_risk = (0 < xfip_val > 4.80) or (0 < whip > 1.45)
@@ -5621,7 +5833,7 @@ def build_weekly_streaming_plan(league, my_team, week_start: str, week_end: str)
             })
 
         # Count open streaming slots (bench pitchers or empty slots)
-        bench_pitchers  = sum(1 for p in pitchers_out if p["is_on_bench"] and p["n_starts"] > 0)
+        bench_pitchers = sum(1 for p in pitchers_out if p["is_on_bench"] and p["n_starts"] > 0)
         streaming_slots = max(0, bench_pitchers)
 
         return {
@@ -5648,11 +5860,10 @@ def build_weekly_streaming_plan(league, my_team, week_start: str, week_end: str)
         return {
             "week_label": "", "week_start": week_start, "week_end": week_end,
             "pitchers": [], "totals": {"proj_ip": 0, "proj_k": 0, "ip_limit": 50,
-                                        "ip_flag": False, "ratio_risk": False,
-                                        "ratio_risk_names": []},
+                                       "ip_flag": False, "ratio_risk": False,
+                                       "ratio_risk_names": []},
             "conflicts": [], "streaming_slots": 0,
         }
-
 
 
 def build_streaming_sp_list(league, my_team, today_games: list) -> list:
@@ -5709,18 +5920,18 @@ def build_streaming_sp_list(league, my_team, today_games: list) -> list:
                 # No game today — still useful for weekly 2-start, but rank lower
                 game_today = False
                 pitcher_name = ""
-                park_factor  = 1.0
-                game_time    = ""
+                park_factor = 1.0
+                game_time = ""
             else:
-                game_today   = True
+                game_today = True
                 pitcher_name = game_info.get("pitcher_name", "TBD")
-                park_factor  = game_info.get("park_factor", 1.0)
-                game_time    = game_info.get("game_time", "")
+                park_factor = game_info.get("park_factor", 1.0)
+                game_time = game_info.get("game_time", "")
 
             # Grade the opposing pitcher (for hitter matchup — same logic inverted)
             if game_today and pitcher_name and pitcher_name != "TBD":
                 matchup = grade_pitcher_matchup(pitcher_name, park_factor)
-                opp_grade = matchup.get("grade", 3)      # 5 = favourable for hitter = bad for streaming SP
+                matchup.get("grade", 3)  # 5 = favourable for hitter = bad for streaming SP
                 # We want the SP to face a WEAK lineup, not the other way round
                 # Grade 1 SP = hard to hit = great to stream; Grade 5 = easy to hit = bad to stream
                 # But we're scoring the SP to stream, not the hitter to start
@@ -5729,9 +5940,9 @@ def build_streaming_sp_list(league, my_team, today_games: list) -> list:
                 sp_grade_info = {"grade": 3, "era_est": 0.0, "swstr": 0.0}
                 if sp_metrics:
                     siera = get_metric(sp_metrics, "SIERA")
-                    xfip  = get_metric(sp_metrics, "xFIP")
-                    fip   = get_metric(sp_metrics, "FIP")
-                    era   = get_metric(sp_metrics, "ERA")
+                    xfip = get_metric(sp_metrics, "xFIP")
+                    fip = get_metric(sp_metrics, "FIP")
+                    era = get_metric(sp_metrics, "ERA")
                     swstr = get_metric(sp_metrics, "SwStp")
                     era_est = siera or xfip or fip or era or 0
                     sp_grade_info = {"era_est": era_est, "swstr": swstr}
@@ -5755,11 +5966,11 @@ def build_streaming_sp_list(league, my_team, today_games: list) -> list:
             ownership = as_float(safe_get(player, "percent_owned", default=0))
 
             # Composite streaming score
-            score  = sp_grade_info.get("grade", 2) * 8.0      # 0-40 pts
+            score = sp_grade_info.get("grade", 2) * 8.0      # 0-40 pts
             score += (park_factor - 1.0) * -15.0               # pitcher-friendly park bonus
             score += 20.0 if two_start else (10.0 if game_today else 0.0)
             era_est = sp_grade_info.get("era_est", 0)
-            swstr   = sp_grade_info.get("swstr", 0)
+            swstr = sp_grade_info.get("swstr", 0)
             if 0 < era_est < 3.50:
                 score += 15.0
             elif 0 < era_est < 4.00:
@@ -5856,7 +6067,7 @@ def build_payload(league):
         print(f"  Win probability failed (non-fatal): {exc}")
         wp = None
 
-    my_sum  = team_summary(my_team)
+    my_sum = team_summary(my_team)
     opp_sum = team_summary(opp_team) if opp_team else None
 
     try:
@@ -5904,7 +6115,7 @@ def build_payload(league):
     if wp:
         m, me, opp = get_matchup(league, my_team)
         if m:
-            hs  = as_float(safe_get(m, "home_score", default=0))
+            hs = as_float(safe_get(m, "home_score", default=0))
             as_ = as_float(safe_get(m, "away_score", default=0))
             if me.team_name == m.home_team.team_name:
                 my_s, opp_s = hs, as_
@@ -5933,7 +6144,7 @@ def build_payload(league):
             # Player-level weekly scoring breakdown
             try:
                 my_sc, opp_sc = get_matchup_scoring_breakdown(league, my_team)
-                matchup_data["my_scoring"]  = my_sc
+                matchup_data["my_scoring"] = my_sc
                 matchup_data["opp_scoring"] = opp_sc
             except Exception:
                 pass  # graceful degradation — scoring breakdown optional
@@ -5989,8 +6200,8 @@ def build_payload(league):
 
     global _TODAY_STARTER_IDS
 
-    my_roster_rows  = sorted(
-        [_player_row(p, my_team)  for p in my_team.roster],
+    my_roster_rows = sorted(
+        [_player_row(p, my_team) for p in my_team.roster],
         key=lambda r: (r["pos"] in ("BE", "BENCH", "IL", "IR"), r["pos"], -float(r["base"]))
     )
     opp_roster_rows = (
@@ -6023,7 +6234,7 @@ def build_payload(league):
     try:
         hitter_matchups = build_hitter_matchups_today(my_roster_rows, today_games)
         favorable = sum(1 for m in hitter_matchups if m["grade"] >= 4)
-        tough     = sum(1 for m in hitter_matchups if m["grade"] <= 2)
+        tough = sum(1 for m in hitter_matchups if m["grade"] <= 2)
         print(f"  Matchup grades: {len(hitter_matchups)} hitters playing — "
               f"{favorable} favorable, {tough} tough")
     except Exception as exc:
@@ -6065,8 +6276,8 @@ def build_payload(league):
         stream_plan = {
             "week_label": "", "week_start": ws, "week_end": we,
             "pitchers": [], "totals": {"proj_ip": 0, "proj_k": 0, "ip_limit": 50,
-                                        "ip_flag": False, "ratio_risk": False,
-                                        "ratio_risk_names": []},
+                                       "ip_flag": False, "ratio_risk": False,
+                                       "ratio_risk_names": []},
             "conflicts": [], "streaming_slots": 0,
         }
 
@@ -6120,8 +6331,8 @@ def build_payload(league):
     waiver_rows = []
     for r in waiver_recs:
         p = r["player"]
-        _age  = _fetch_player_age(p)
-        _at   = age_tier(_age)
+        _age = _fetch_player_age(p)
+        _at = age_tier(_age)
         waiver_rows.append({
             "player":       p.name,
             "pos":          ", ".join(get_player_slots(p)[:2]),

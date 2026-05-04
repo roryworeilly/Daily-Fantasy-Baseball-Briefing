@@ -19,11 +19,41 @@ var _pmMlbam     = '';
 var _newsCache   = null;
 var _newsLoading = false;
 
+function _stateLoading(label, compact) {
+  var cls = compact ? ' state-loading compact' : ' state-loading';
+  var row = '<div class="skeleton-row" aria-hidden="true">'
+          + '<span class="skeleton-avatar"></span>'
+          + '<span><span class="skeleton-line long"></span><span class="skeleton-line med mt-8" style="display:block"></span></span>'
+          + '<span class="skeleton-line short"></span>'
+          + '</div>';
+  return '<div class="' + cls.trim() + '" aria-live="polite" aria-label="' + _esc(label || 'Loading') + '">'
+       + row + row + '</div>';
+}
+
+function _hiddenAvatarFallback(text) {
+  return '<span class="av-fb visually-hidden">' + _esc(text) + '</span>';
+}
+
+function _scoreBadge(label, value, borderColor) {
+  return '<span class="pm-score-badge" style="border-color:' + borderColor + '">'
+       + _esc(label) + ' ' + _esc(value) + '</span>';
+}
+
+function _stateMessage(text, tone, compact) {
+  var cls = 'state-message' + (tone === 'error' ? ' error' : '') + (compact ? ' compact' : '');
+  var role = tone === 'error' ? ' role="alert"' : ' aria-live="polite"';
+  return '<div class="' + cls + '"' + role + '>' + _esc(text) + '</div>';
+}
+
 // ── Tab switcher (single consolidated function — replaces three-layer override chain) ──
 function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(
     b => b.classList.toggle('active', b.dataset.tab === tab)
   );
+  var moreWrap = document.querySelector('.tab-more-wrap');
+  if (moreWrap) moreWrap.classList.toggle('active', tab === 'howitworks');
+  var moreBtn = document.getElementById('tab-more-btn');
+  if (moreBtn) moreBtn.setAttribute('aria-expanded', 'false');
   document.querySelectorAll('.tab-pane').forEach(
     p => p.style.display = p.dataset.tab === tab ? 'block' : 'none'
   );
@@ -82,7 +112,7 @@ function buildYearOptions() {
 function changeModalYear(year) {
   year = parseInt(year, 10);
   var w = document.getElementById('pm-log-wrap');
-  if (w) w.innerHTML = '<div class="pm-loading">Loading\u2026</div>';
+  if (w) w.innerHTML = '<div class="pm-loading">' + _stateLoading('Loading game log', true) + '</div>';
   var mid = _mlbamCache[_pmName] || _pmMlbam;
   fetchGameLog(mid, _pmIsp, _pmName, year);
 }
@@ -91,9 +121,9 @@ function loadNewsTab() {
   if (_newsCache !== null || _newsLoading) return;
   _newsLoading = true;
   var wrap = document.getElementById('news-list-wrap');
-  if (wrap) wrap.innerHTML = '<div class="news-loading">Loading roster news\u2026</div>';
+  if (wrap) wrap.innerHTML = '<div class="news-loading">' + _stateLoading('Loading roster news') + '</div>';
   if (!window.FDB_ROSTER || !FDB_ROSTER.length) {
-    if (wrap) wrap.innerHTML = '<div class="news-empty">No roster players found.</div>';
+    if (wrap) wrap.innerHTML = '<div class="news-empty">' + _stateMessage('No roster players found.') + '</div>';
     _newsLoading = false;
     _newsCache   = [];
     return;
@@ -244,7 +274,7 @@ function renderNews(items) {
   var wrap = document.getElementById('news-list-wrap');
   if (!wrap) return;
   if (!items.length) {
-    wrap.innerHTML = '<div class="news-empty">Nothing notable in the last 7 days.</div>';
+    wrap.innerHTML = '<div class="news-empty">' + _stateMessage('Nothing notable in the last 7 days.') + '</div>';
     return;
   }
   items.sort(function (a, b) { return b.date > a.date ? 1 : b.date < a.date ? -1 : 0; });
@@ -258,7 +288,7 @@ function renderNews(items) {
         avHtml += 'onerror="this.src=\'' + p.hs2 + '\';this.onerror=function(){this.style.display=\'none\';this.nextSibling.style.display=\'flex\';}" ';
       else
         avHtml += 'onerror="this.style.display=\'none\';this.nextSibling.style.display=\'flex\';" ';
-      avHtml += '><span class="av-fb" style="display:none">' + p.ini + '</span>';
+      avHtml += '>' + _hiddenAvatarFallback(p.ini);
     } else {
       avHtml = '<span class="av-fb">' + p.ini + '</span>';
     }
@@ -318,7 +348,7 @@ function doFetchGameLog(mid, isp, year) {
     })
     .catch(function () {
       var w = document.getElementById('pm-log-wrap');
-      if (w) w.innerHTML = '<div class="pm-empty">Could not load game log.</div>';
+      if (w) w.innerHTML = '<div class="pm-empty">' + _stateMessage('Could not load game log.', 'error') + '</div>';
     });
 }
 
@@ -339,12 +369,12 @@ function fetchGameLog(mid, isp, pname, year) {
         doFetchGameLog(_mlbamCache[pname], isp, year);
       } else {
         var w = document.getElementById('pm-log-wrap');
-        if (w) w.innerHTML = '<div class="pm-empty">No MLB stats found for this player.</div>';
+        if (w) w.innerHTML = '<div class="pm-empty">' + _stateMessage('No MLB stats found for this player.') + '</div>';
       }
     })
     .catch(function () {
       var w = document.getElementById('pm-log-wrap');
-      if (w) w.innerHTML = '<div class="pm-empty">Could not load game log.</div>';
+      if (w) w.innerHTML = '<div class="pm-empty">' + _stateMessage('Could not load game log.', 'error') + '</div>';
     });
 }
 
@@ -352,7 +382,7 @@ function renderGameLog(splits, isp) {
   var w = document.getElementById('pm-log-wrap');
   if (!w) return;
   if (!splits.length) {
-    w.innerHTML = '<div class="pm-empty">No games played yet this season.</div>';
+    w.innerHTML = '<div class="pm-empty">' + _stateMessage('No games played yet this season.') + '</div>';
     return;
   }
 
@@ -472,13 +502,20 @@ function switchToolsTab(tab){
 
 function toggleMoreMenu(){
   var menu = document.getElementById('tab-more-menu');
-  if(menu) menu.classList.toggle('open');
+  var btn = document.getElementById('tab-more-btn');
+  if(menu) {
+    var isOpen = menu.classList.toggle('open');
+    if(btn) btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    menu.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+  }
 }
 
 document.addEventListener('click', function(e){
   if(!e.target.closest || !e.target.closest('.tab-more-wrap')){
     var menu = document.getElementById('tab-more-menu');
-    if(menu) menu.classList.remove('open');
+    if(menu) { menu.classList.remove('open'); menu.setAttribute('aria-hidden', 'true'); }
+    var btn = document.getElementById('tab-more-btn');
+    if(btn) btn.setAttribute('aria-expanded', 'false');
   }
 });
 
@@ -540,7 +577,7 @@ function _renderDropZone(slot,p){
   var avHtml='';
   if(p.hs){
     avHtml='<img src="'+p.hs+'" alt="'+p.name+'" '+(p.hs2?'onerror="this.src=\''+p.hs2+'\';this.onerror=function(){this.style.display=\'none\';this.nextSibling.style.display=\'flex\';};"':'onerror="this.style.display=\'none\';this.nextSibling.style.display=\'flex\';"')+'>';
-    avHtml+='<div class="dz-av-fb" style="display:none">'+p.ini+'</div>';
+    avHtml+='<div class="dz-av-fb visually-hidden">'+p.ini+'</div>';
   }else{
     avHtml='<div class="dz-av-fb">'+p.ini+'</div>';
   }
@@ -552,7 +589,7 @@ function _renderDropZone(slot,p){
     '<div class="dz-name">'+p.name+'</div>'+
     '<div class="dz-sub"><span class="pos pos-'+posS+'">'+p.pos+'</span><span>'+p.mlb+'</span></div>'+
     '</div>'+
-    '<button class="dz-clear" onclick="clearSlot(\''+slot+'\')">&#x2715;</button>'+
+    '<button type="button" class="dz-clear" onclick="clearSlot(\''+slot+'\')">&#x2715;</button>'+
     '</div>'
   );
 }
@@ -632,7 +669,7 @@ function _renderCmpTable(){
   rows+=_sectionRow('Season Stats ('+(loading?'loading…':FDB_YEAR)+')');
 
   if(loading){
-    rows+='<tr><td colspan="3" style="text-align:center;color:var(--text2);padding:12px">Fetching stats…</td></tr>';
+    rows+='<tr><td colspan="3"><div class="state-loading compact" aria-live="polite" aria-label="Fetching season stats"><span class="skeleton-line long"></span><span class="skeleton-line med"></span></div></td></tr>';
   } else {
     var g=function(obj,k){return(obj&&obj[k]!==undefined&&obj[k]!==null)?obj[k]:null;};
     var f1=function(v){return v!==null?parseFloat(v).toFixed(1):'—';};
@@ -665,7 +702,7 @@ function _renderCmpTable(){
       rows+=_cmpRow('SLG',g(sa,'slg'),g(sb,'slg'),false,f3(g(sa,'slg')),f3(g(sb,'slg')));
       rows+=_cmpRow('OPS',g(sa,'ops'),g(sb,'ops'),false,f3(g(sa,'ops')),f3(g(sb,'ops')));
     } else {
-      rows+='<tr><td colspan="3" style="text-align:center;color:var(--text2);font-size:11px;padding:10px">Mixed pitcher / hitter — raw stats not directly comparable</td></tr>';
+      rows+='<tr><td colspan="3" class="table-empty">Mixed pitcher / hitter — raw stats not directly comparable</td></tr>';
     }
   }
 
@@ -919,7 +956,7 @@ function openPlayerModal(ev, el) {
       ? 'onerror="this.src=\'' + hs2 + '\';this.onerror=function(){this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';};"'
       : 'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';"';
     avHtml = '<img src="' + hs + '" alt="' + _esc(name) + '" loading="lazy" ' + onerr + '>'
-           + '<span class="av-fb" style="display:none">' + _esc(ini) + '</span>';
+           + _hiddenAvatarFallback(ini);
   } else {
     avHtml = '<span class="av-fb">' + _esc(ini) + '</span>';
   }
@@ -931,7 +968,7 @@ function openPlayerModal(ev, el) {
 
   // ── Injury banner ──
   var injBanner = onIl
-    ? '<div id="pm-inj-banner" class="pm-inj-banner"><span class="pm-inj-loading">Loading injury details…</span></div>'
+    ? '<div id="pm-inj-banner" class="pm-inj-banner" aria-live="polite"><span class="pm-inj-loading">Loading injury details…</span></div>'
     : '';
 
   // ── Advanced stats pane content ──
@@ -945,31 +982,31 @@ function openPlayerModal(ev, el) {
     '<div class="pm-header">' +
       '<div class="pm-av">' + avHtml + '</div>' +
       '<div class="pm-info">' +
-        '<div class="pm-name">' + _esc(name) + '</div>' +
+        '<div class="pm-name" id="pm-title">' + _esc(name) + '</div>' +
         '<div class="pm-meta">' +
           '<span class="pos pos-' + posS + '">' + _esc(pos) + '</span>' +
-          '<span style="color:var(--text2);font-size:13px">' + _esc(team) + '</span>' +
+          '<span class="shell-subtle">' + _esc(team) + '</span>' +
         '</div>' +
         '<div class="pm-scores">' +
-          '<span class="pm-score-badge" style="border-color:' + bc + '">Val ' + _esc(base) + '</span>' +
-          '<span class="pm-score-badge" style="border-color:#58a6ff">Fit ' + _esc(fit) + '</span>' +
-          '<span class="pm-score-badge" style="border-color:var(--text2)">' + _esc(proj) + ' pts proj</span>' +
+          _scoreBadge('Val', base, bc) +
+          _scoreBadge('Fit', fit, '#58a6ff') +
+          _scoreBadge('Proj', proj + ' pts', 'var(--text2)') +
         '</div>' +
       '</div>' +
     '</div>' +
     injBanner +
     // Tab bar
     '<div class="pm-modal-tabs">' +
-      '<button class="pm-modal-tab active" id="pm-tab-log" onclick="pmSwitchTab(\'log\')">▶︎ Game Log</button>' +
-      '<button class="pm-modal-tab" id="pm-tab-adv" onclick="pmSwitchTab(\'adv\')">◕︎ Advanced Stats</button>' +
+      '<button type="button" class="pm-modal-tab active" id="pm-tab-log" onclick="pmSwitchTab(\'log\')">Game Log</button>' +
+      '<button type="button" class="pm-modal-tab" id="pm-tab-adv" onclick="pmSwitchTab(\'adv\')">Advanced Stats</button>' +
     '</div>' +
     // Game log pane
     '<div id="pm-pane-log">' +
-      '<div class="pm-section-title" style="display:flex;align-items:center;justify-content:space-between;padding-right:20px">' +
+      '<div class="pm-section-title flex-between pad-y-8 pad-x-12">' +
         '<span>' + (isp ? 'Last 10 Outings' : 'Last 10 Games') + '</span>' +
         '<select id="pm-year-sel" class="pm-year-sel" onchange="changeModalYear(this.value)">' + yearOpts + '</select>' +
       '</div>' +
-      '<div id="pm-log-wrap" class="pm-log-wrap"><div class="pm-loading">Loading game log…</div></div>' +
+      '<div id="pm-log-wrap" class="pm-log-wrap"><div class="pm-loading">' + _stateLoading('Loading game log', true) + '</div></div>' +
     '</div>' +
     // Advanced stats pane (hidden)
     '<div id="pm-pane-adv" class="adv-pane-hidden">' +
@@ -996,7 +1033,7 @@ function openPlayerModal(ev, el) {
 // Build the advanced stats pane content as an HTML string
 function _buildAdvPaneHtml(adv, isp) {
   if (!adv || !Object.keys(adv).length) {
-    return '<div class="adv-empty">No advanced stats available for this player.<br>' +
+    return '<div class="adv-empty" aria-live="polite">No advanced stats available for this player.<br>' +
            '<small>Run <code>build_reference_cache.py --force</code> to populate.</small></div>';
   }
   var html = '<div class="adv-inner">';
@@ -1633,7 +1670,7 @@ function buildDraftPanel(draft){
 
   // Standings
   var avg=draft.opponent_avg;
-  html+='<div class="dr-col"><h3 class="dr-col-head">🏆 Final Season Standings</h3>'
+  html+='<div class="dr-col"><h3 class="dr-col-head">Final Season Standings</h3>'
     +'<table class="dr-standings-table"><thead><tr><th>Place</th><th>Team</th><th>Points</th><th>vs Avg</th></tr></thead><tbody>';
   scores.forEach(function(s,place){
     var isFDB=s.team===1;var diff=s.pts-avg;
@@ -1952,7 +1989,7 @@ buildDraftPanel = function(draft) {
   }
 
   var compareBlock = '<div class="dc-selector-bar">'
-    +'<h3 class="dr-col-head" style="margin-top:2rem;margin-bottom:.4rem;">\uD83D\uDD04 Draft Compare</h3>'
+    +'<h3 class="dr-col-head" style="margin-top:2rem;margin-bottom:.4rem;">Draft Compare</h3>'
     +'<p style="color:var(--text2);font-size:.82rem;margin-bottom:.9rem;">'
     +'Select any two teams and compare their draft strategy across all metrics.</p>'
     +'<div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center;">'
@@ -1964,13 +2001,13 @@ buildDraftPanel = function(draft) {
     +'Team B '
     +'<select id="dc-b-d'+dn+'" class="dc-team-sel dc-sel-b">'+teamOpts(1)+'</select>'
     +'</label>'
-    +'<button class="dr-tab" style="padding:.35rem 1rem;cursor:pointer;" '
+    +'<button type="button" class="dr-tab" style="padding:.35rem 1rem;cursor:pointer;" '
     +'onclick="(function(){'
     +'var a=parseInt(document.getElementById(\'dc-a-d'+dn+'\').value);'
     +'var b=parseInt(document.getElementById(\'dc-b-d'+dn+'\').value);'
     +'if(a===b){alert(\'Please select two different teams.\');return;}'
     +'dcRenderCompare(\''+cid+'\',MC_DRAFT_DATA.drafts['+(dn-1)+'],a,b);'
-    +'})()">\u25B6 Compare</button>'
+    +'})()">Compare</button>'
     +'</div>'
     +'<div id="'+cid+'" style="margin-top:1rem;"></div>'
     +'</div>';
@@ -2079,7 +2116,7 @@ function lv_section(icon, title, sub, players) {
 
 function buildLineupView() {
   var players = lv_getMyPlayers();
-  if (!players.length) return '<p style="color:var(--text2);padding:16px">No roster data available.</p>';
+  if (!players.length) return '<p class="table-empty">No roster data available.</p>';
 
   function s(arr, key) { return arr.slice().sort(function(a,b){ return b[key]-a[key]; }); }
 
@@ -2146,7 +2183,7 @@ function pm_getPlayers(side) {
 
 function pm_build() {
   var mine = pm_getPlayers('mine'), opp = pm_getPlayers('opp');
-  if (!mine.length || !opp.length) return '<p style="color:var(--text2);padding:12px">Roster data not yet loaded.</p>';
+  if (!mine.length || !opp.length) return '<p class="table-empty">Roster data not yet loaded.</p>';
 
   var POS = ['C','1B','2B','3B','SS','OF','UTIL','P'];
   function bucket(p) { return p.isp ? 'P' : (p.pos || 'UTIL'); }
@@ -2587,11 +2624,11 @@ function tc_buildTable(side, teamName) {
 
   // Controls
   html += '<div class="tc-tbl-ctrl">';
-  html += '<input class="tc-tbl-search" type="text" placeholder="🔍 Search…" value="' + _esc(search) + '"'
+  html += '<input class="tc-tbl-search" type="text" placeholder="Search…" value="' + _esc(search) + '"'
     + ' oninput="tc_onSearch(\'' + side + '\',this.value)">';
-  html += '<button class="tc-fpill' + (filter==='all'?' active':'') + '" onclick="tc_setFilter(\'' + side + '\',\'all\')">All</button>';
-  html += '<button class="tc-fpill' + (filter==='H'?' active':'') + '" onclick="tc_setFilter(\'' + side + '\',\'H\')">H</button>';
-  html += '<button class="tc-fpill' + (filter==='P'?' active':'') + '" onclick="tc_setFilter(\'' + side + '\',\'P\')">P</button>';
+  html += '<button type="button" class="tc-fpill' + (filter==='all'?' active':'') + '" onclick="tc_setFilter(\'' + side + '\',\'all\')">All</button>';
+  html += '<button type="button" class="tc-fpill' + (filter==='H'?' active':'') + '" onclick="tc_setFilter(\'' + side + '\',\'H\')">H</button>';
+  html += '<button type="button" class="tc-fpill' + (filter==='P'?' active':'') + '" onclick="tc_setFilter(\'' + side + '\',\'P\')">P</button>';
   html += '</div>';
 
   // Player list
@@ -2651,7 +2688,7 @@ function tc_buildTable(side, teamName) {
       }
       html += '</div></div>';
       html += '<div class="tc-score-cell">' + p.base.toFixed(0) + '</div>';
-      html += '<button class="' + btnCls + '"'
+      html += '<button type="button" class="' + btnCls + '"'
         + (inTrade ? ' disabled' : ' onclick="tc_addToBasket(\'' + side + '\',\'' + _escQ(p.name) + '\')"')
         + '>' + btnTxt + '</button>';
       html += '</div>';
@@ -2675,7 +2712,7 @@ function tc_buildBbar() {
       var posFirst = (p.pos||'').split(',')[0].trim();
       return '<span class="tc-bchip ' + side + '">'
         + _esc(p.name) + ' <span class="tc-bchip-pts">' + p.base.toFixed(0) + '</span>'
-        + '<button class="tc-bchip-rm" onclick="tc_removeFromBasket(\'' + side + '\',\'' + _escQ(p.name) + '\')">✕</button>'
+        + '<button type="button" class="tc-bchip-rm" onclick="tc_removeFromBasket(\'' + side + '\',\'' + _escQ(p.name) + '\')">✕</button>'
         + '</span>';
     }).join('');
   }
@@ -2690,14 +2727,14 @@ function tc_buildBbar() {
   var evalDis = (!TC.basketA.length && !TC.basketB.length) ? ' disabled' : '';
   var html = '';
   html += '<div class="tc-bbar-head">';
-  html += '<div class="tc-bbar-title">🧺 Trade Baskets</div>';
+  html += '<div class="tc-bbar-title">Trade Baskets</div>';
   html += '<div class="tc-bbar-hint">Drag from rosters above, or click +</div>';
   html += '</div>';
   html += '<div class="tc-bbar-body">';
 
   // Zone A
   html += '<div class="tc-bzone a" ondragover="tc_onDragOver(event)" ondrop="tc_onDrop(event,\'a\')" ondragleave="tc_onDragLeave(event)">';
-  html += '<div class="tc-bzone-lbl"><span>📤 ' + _esc(TC.teamA.substring(0,20)) + ' Sends</span>';
+  html += '<div class="tc-bzone-lbl"><span>' + _esc(TC.teamA.substring(0,20)) + ' Sends</span>';
   html += '<span class="tc-bzone-lbl-total">' + (aVal > 0 ? aVal.toFixed(0) + ' pts' : '') + '</span></div>';
   html += '<div class="tc-bzone-chips">' + chips(TC.basketA, 'a') + '</div>';
   html += '</div>';
@@ -2710,15 +2747,15 @@ function tc_buildBbar() {
 
   // Zone B
   html += '<div class="tc-bzone b" ondragover="tc_onDragOver(event)" ondrop="tc_onDrop(event,\'b\')" ondragleave="tc_onDragLeave(event)">';
-  html += '<div class="tc-bzone-lbl"><span>📤 ' + _esc(TC.teamB.substring(0,20)) + ' Sends</span>';
+  html += '<div class="tc-bzone-lbl"><span>' + _esc(TC.teamB.substring(0,20)) + ' Sends</span>';
   html += '<span class="tc-bzone-lbl-total">' + (bVal > 0 ? bVal.toFixed(0) + ' pts' : '') + '</span></div>';
   html += '<div class="tc-bzone-chips">' + chips(TC.basketB, 'b') + '</div>';
   html += '</div>';
 
   html += '</div>'; // tc-bbar-body
   html += '<div class="tc-bbar-footer">';
-  html += '<button id="tc-eval-btn" class="tc-analyze-btn"' + evalDis + ' onclick="tc_analyzeTrade()">⚡ Analyze Trade</button>';
-  html += '<button class="tc-clear-btn" onclick="tc_clearBaskets()">✕ Clear All</button>';
+  html += '<button type="button" id="tc-eval-btn" class="tc-analyze-btn"' + evalDis + ' onclick="tc_analyzeTrade()">Analyze Trade</button>';
+  html += '<button type="button" class="tc-clear-btn" onclick="tc_clearBaskets()">✕ Clear All</button>';
   html += '</div>';
   return html;
 }
@@ -3120,7 +3157,7 @@ function buildTradeCalculator() {
 
   // Header
   html += '<div class="tc-header">';
-  html += '<div class="tc-header-icon">🔄</div>';
+  html += '<div class="tc-header-icon">TC</div>';
   html += '<div><div class="tc-title">Trade Calculator</div>';
   html += '<div class="tc-subtitle">Click + or drag players into the baskets below &middot; analyze value, fit &amp; post-trade rosters &middot; all ' + TC.teamOrder.length + ' league teams accessible</div></div>';
   html += '</div>';
@@ -3128,19 +3165,19 @@ function buildTradeCalculator() {
   // Team selector row
   html += '<div class="tc-team-row">';
   html += '<div class="tc-sel-group">';
-  html += '<div class="tc-sel-label a">📋 Team A (Your Side)</div>';
+  html += '<div class="tc-sel-label a">Team A (Your Side)</div>';
   html += '<select class="tc-team-select a" onchange="tc_onTeamAChange(this.value)">' + selOpts(TC.teamA, TC.teamB) + '</select>';
   html += '</div>';
   html += '<div class="tc-vs-center">⇄</div>';
   html += '<div class="tc-sel-group">';
-  html += '<div class="tc-sel-label b">📋 Team B (Trading Partner)</div>';
+  html += '<div class="tc-sel-label b">Team B (Trading Partner)</div>';
   html += '<select class="tc-team-select b" onchange="tc_onTeamBChange(this.value)">' + selOpts(TC.teamB, TC.teamA) + '</select>';
   html += '</div>';
   html += '</div>';
 
   // P6: Quick player filter
   html += '<div class="tc-scenario-bar">';
-  html += '<label>🔍 Quick Player Filter</label>';
+  html += '<label>Quick Player Filter</label>';
   html += '<input class="tc-filter" id="tc-filter-input" placeholder="Type player name to find them on your roster..." oninput="tc_filterRosterCards(this.value)" autocomplete="off">';
   html += '</div>';
 
@@ -3300,7 +3337,7 @@ function ls_refresh() {
       LS.loading = false;
       var feed = document.getElementById('live-scoring-feed');
       if (feed) feed.innerHTML =
-        '<div class="ls-empty">Could not load scoring data — check your connection.</div>';
+        '<div class="ls-empty">' + _stateMessage('Could not load scoring data — check your connection.', 'error') + '</div>';
     });
 }
 
@@ -3449,7 +3486,7 @@ function ls_avatar(p) {
       : 'this.style.display=\'none\';this.nextSibling.style.display=\'flex\';';
     return '<img class="ls-av" src="' + _esc(p.hs) + '" alt="' + _esc(p.name) + '" '
          + 'onerror="' + err + '">'
-         + '<div class="ls-av-fb" style="display:none">' + _esc(p.ini) + '</div>';
+         + '<div class="ls-av-fb visually-hidden">' + _esc(p.ini) + '</div>';
   }
   return '<div class="ls-av-fb">' + _esc(p.ini) + '</div>';
 }
@@ -3588,7 +3625,7 @@ function ls_renderBoxscores(results) {
       + '<div class="ls-section-title">'
       + '<span class="ls-pulse"></span>Today\'s Scoring Events'
       + '</div>'
-      + '<div class="ls-empty">' + diagMsg + '</div>'
+      + '<div class="ls-empty">' + _stateMessage(diagMsg) + '</div>'
       + ls_footerHtml(false)
       + '</div>';
     return;
@@ -3616,7 +3653,7 @@ function ls_renderBoxscores(results) {
   if (mineEvents.length) {
     mineEvents.forEach(function (ev) { html += ls_eventHtml(ev); });
   } else {
-    html += '<div class="ls-empty">No stats yet today</div>';
+    html += '<div class="ls-empty">' + _stateMessage('No stats yet today', '', true) + '</div>';
   }
   html += '</div>';
 
@@ -3626,7 +3663,7 @@ function ls_renderBoxscores(results) {
   if (oppEvents.length) {
     oppEvents.forEach(function (ev) { html += ls_eventHtml(ev); });
   } else {
-    html += '<div class="ls-empty">No stats yet today</div>';
+    html += '<div class="ls-empty">' + _stateMessage('No stats yet today', '', true) + '</div>';
   }
   html += '</div>';
 
@@ -3671,7 +3708,7 @@ function ls_footerHtml(hasLive) {
   var autoNote = hasLive ? ' · auto-refreshes every 90s' : '';
   return '<div class="ls-refresh-row">'
        + '<span>' + (ts ? 'Updated ' + ts + autoNote : '') + '</span>'
-       + '<button class="ls-refresh-btn" onclick="ls_refresh()">↻ Refresh</button>'
+       + '<button type="button" class="ls-refresh-btn" onclick="ls_refresh()">↻ Refresh</button>'
        + '</div>';
 }
 

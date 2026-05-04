@@ -20,7 +20,7 @@ FB/                              ← workspace root (SCRIPT_DIR)
 ├── src/fdb/                     ← main Python package
 │   ├── __init__.py              ← imports run.main
 │   ├── assets.py                ← loads res/briefing.css + res/briefing.js from disk
-│   ├── html.py                  ← HTML renderer (6012 lines)
+│   ├── html.py                  ← HTML renderer + semantic dashboard shell (6045 lines)
 │   ├── model.py                 ← all data-fetch + scoring logic (6193 lines)
 │   ├── run.py                   ← CLI entry point / cache auto-rebuild
 │   ├── settings.py              ← all config, scoring dicts, DB handles
@@ -33,8 +33,8 @@ FB/                              ← workspace root (SCRIPT_DIR)
 │   ├── generate_draft_logs.py   ← draft history tool
 │   └── model_comparison.py      ← ESPN vs FDB scoring comparison tool
 ├── res/
-│   ├── briefing.css             ← all page CSS (~1792 lines, edit directly)
-│   └── briefing.js              ← all page JS  (~3751 lines, edit directly)
+│   ├── briefing.css             ← all page CSS (~1865 lines, edit directly)
+│   └── briefing.js              ← all page JS  (~3778 lines, edit directly)
 ├── test/
 │   ├── conftest.py              ← pytest stubs (no ESPN credentials needed)
 │   ├── test_utils.py            ← 32 tests — utils.py
@@ -243,20 +243,20 @@ run.main()
 
 ```
 Today          (data-tab="today")
-  ├─ 📊 Overview   [tdpane-overview]  — news banner + live matchup + schedule
-  ├─ 🔄 Waivers    [tdpane-waivers]   — streaming plan + waiver wire
-  └─ ⚔ Compare    [tdpane-compare]   — drag-and-drop player comparison
+  ├─ Overview   [tdpane-overview]  — news banner + live matchup + schedule
+  ├─ Waivers    [tdpane-waivers]   — streaming plan + waiver wire
+  └─ Compare    [tdpane-compare]   — drag-and-drop player comparison
 
 My Team        (data-tab="myteam")
   └─ Full roster + team viewer + League standings (folded in at bottom)
 
 Tools          (data-tab="tools")
-  ├─ 📈 Analytics  [tspane-analytics] — Monte Carlo model, draft history
-  ├─ 📊 Season Pace [tspane-seasonpace] — actual vs projected pace
-  └─ 🔀 Trade      [tspane-trade]     — trade calculator (lazy-built)
+  ├─ Analytics   [tspane-analytics] — Monte Carlo model, draft history
+  ├─ Season Pace [tspane-seasonpace] — actual vs projected pace
+  └─ Trade       [tspane-trade]     — trade calculator (lazy-built)
 
 ⋯ More (dropdown)
-  └─ 📖 How It Works  (data-tab="howitworks") — model explanation + season sim
+  └─ How It Works  (data-tab="howitworks") — model explanation + season sim
 ```
 
 ### Tab switcher functions (in `res/briefing.js`)
@@ -296,9 +296,12 @@ Tools          (data-tab="tools")
 | `render_html(data)` | Top-level — assembles full HTML page from data dict |
 
 ### CSS / JS assets
-- **`res/briefing.css`** — edit directly; loaded at import via `assets.reload_css_js()`
-- **`res/briefing.js`** — edit directly; injected as inline `<script>` at page bottom
-- CSS variables: `--card-bg`, `--border`, `--text1`, `--text2`, `--accent`, `--red`, `--hover`, `--surface2`
+- **`res/briefing.css`** — edit directly; loaded at import via `assets.reload_css_js()`; owns visual tokens, layout, states, and utility classes
+- **`res/briefing.js`** — edit directly; injected as inline `<script>` at page bottom; owns tabs, modal behavior, dynamic news/scoring/tools, and More menu ARIA state
+- CSS variables: `--font-sans`, `--font-display`, `--font-mono`, `--card`, `--card-bg`, `--border`, `--text1`, `--text2`, `--text3`, `--accent`, `--red`, `--hover`, `--surface2`, `--z-sticky`, `--z-dropdown`, `--z-modal`
+- Shared UI state classes: `.state-loading`, `.state-message`, `.state-message.error`, `.table-empty`, `.muted`, `.muted-sm`, `.muted-xs`, `.center-cell`, `.strong-cell`, `.accent-cell`, `.inline-player`, `.narrow-shell`
+- The generated shell now includes `header`, `nav`, `main`, `footer`, a skip link, explicit button types, modal `role="dialog"` / `aria-modal`, meta description, Open Graph basics, and a data-URI favicon.
+- Source files are canonical. Regenerate `output/Daily Briefing.html` with `python3 run_briefing.py`; do not hand-edit generated output.
 
 ---
 
@@ -394,6 +397,10 @@ Returns:
 
 7. **`esc(v)`** — always wrap user-facing strings in `esc()` before embedding in HTML (defined in model.py, imported by html.py).
 
+8. **Briefing UI validation** — after editing `src/fdb/html.py`, `res/briefing.css`, or `res/briefing.js`, run `python3 -m py_compile src/fdb/html.py`, `node --check res/briefing.js`, and `python3 run_briefing.py`. The generated preview target is `output/Daily Briefing.html`.
+
+9. **Inline style discipline** — prefer existing utility classes and state components for repeated layout, muted text, table-empty states, and loading/error UI. Leave one-off dynamic colors, calculated widths, and canvas/chart dimensions inline when moving them would increase risk.
+
 ---
 
 ## Dependency Notes
@@ -417,6 +424,7 @@ Returns:
 
 | Date | Change |
 |---|---|
+| 2026-05 | Staged briefing redesign completed: semantic shell, accessibility pass, token cleanup, nav/card/typography polish, emoji reduction, loading/empty/error state components, and focused inline style reduction |
 | 2026-05 | Tab nav restructured: 10 tabs → 4 (Today, My Team, Tools, ⋯ More) |
 | 2026-05 | Weekly Pitcher Streaming Plan feature added (model.py + html.py) |
 | 2026-05 | Full code review: 8 bugs fixed, ~900 lines dead code removed, utils.py created |
@@ -424,4 +432,4 @@ Returns:
 
 ---
 
-*Last updated: 2026-05-01*
+*Last updated: 2026-05-04*

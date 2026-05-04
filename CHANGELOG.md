@@ -9,16 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Repo-level `.flake8` baseline so CI linting can enforce maintained files without failing on the known legacy/generated modules and older test fixtures
+- Redesigned briefing shell with semantic `header` / `nav` / `main` / `footer` landmarks, skip-to-content link, accessible player modal semantics, meta description, Open Graph tags, and data-URI favicon
+- Shared dashboard state components for skeleton loading, empty states, and error panels, including `aria-live` and `role="alert"` where appropriate
+- CSS design tokens for fonts, common surface aliases, z-index layers, hover/card states, and reusable utility classes for muted text, table-empty rows, centered cells, inline player rows, and narrow content shells
 
 ### Changed
 - GitHub Actions lint step now reads the shared repo flake8 configuration instead of hard-coding lint flags in the workflow
 - Shared flake8 enforcement now includes `run.py`, `build_statcast_cache.py`, and the related scoring/simulation tests after targeted cleanup reduced the legacy exclude list
+- Briefing typography now uses IBM Plex Sans for UI text, Oswald for display headings, and JetBrains Mono for numeric/data-heavy elements
+- Top-level and inner navigation, cards, tables, roster panels, matchup sections, and tool panes were visually polished while preserving the existing generated HTML / CSS / JS architecture
+- High-visibility emoji labels in navigation, section headings, buttons, analytics cards, modal tabs, and trade tools were replaced with plain labels or compact text badges
+- Repeated inline styles in newly touched generated markup were moved into reusable CSS classes while leaving dynamic values such as calculated colors and widths inline
 
 ### Fixed
 - `run.py` now validates the loaded Statcast cache and can force a real legacy rebuild by passing `--force` through to cache builder modules that expose `main()`
 - `load_current_season_db()` now falls back to the last same-season cache snapshot when live refresh fails, instead of dropping straight to preseason-only data
 - `load_statcast_db()` now surfaces broken caches with missing player names instead of silently building an empty MLBAM reverse index
 - `build_statcast_cache.py` now recognises more Baseball Savant name column variants and refuses to overwrite an existing cache when fetches fail or rows contain no usable player names
+- Briefing UI controls now consistently use explicit `type="button"` to avoid accidental form-submit behavior in generated dashboard controls
+- The More menu now keeps `aria-expanded` and active state in sync when navigating to and from How It Works
 
 ### Planned
 - Additional Statcast metrics (whiff rate, chase rate, spin rate trends)

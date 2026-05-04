@@ -6,6 +6,5 @@ exclude =
     __pycache__,
     .venv,
     src/fdb/html.py,
-    src/fdb/model.py,
     tools/generate_draft_logs.py,
     tools/model_comparison.py,

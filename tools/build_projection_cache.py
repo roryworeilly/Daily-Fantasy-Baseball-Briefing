@@ -30,17 +30,17 @@ Cache location: FB/projection_cache.json
 Cache TTL: 7 days (projections update weekly early in season)
 """
 
+import json
+import importlib
 import os
 import sys
-import json
 import time
-import io
 from datetime import datetime
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
-SCRIPT_DIR  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CACHE_PATH  = os.path.join(SCRIPT_DIR, "projection_cache.json")
-YEAR        = int(os.environ.get("YEAR", "2026"))
+SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CACHE_PATH = os.path.join(SCRIPT_DIR, "projection_cache.json")
+YEAR = int(os.environ.get("YEAR", "2026"))
 CACHE_TTL_DAYS = 7
 
 # ── Scoring rules — import from settings.py (single source of truth) ──────────
@@ -65,9 +65,10 @@ except ImportError:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-import sys, os as _os
-sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), '..', 'src'))
-from fdb.utils import normalize_name, compact as _c, cache_is_fresh as _cache_is_fresh
+_utils = importlib.import_module("fdb.utils")
+normalize_name = _utils.normalize_name
+_c = _utils.compact
+_cache_is_fresh = _utils.cache_is_fresh
 
 
 def _fetch_fg_projection_json(proj_type: str, stats: str) -> list[dict]:
@@ -85,7 +86,9 @@ def _fetch_fg_projection_json(proj_type: str, stats: str) -> list[dict]:
     Falls back to [] on any error.
     """
     try:
-        import requests, certifi
+        import certifi
+        import requests
+
         url = (
             "https://www.fangraphs.com/api/projections"
             f"?type={proj_type}&stats={stats}&pos=all&team=0&players=0&lg=all"
@@ -96,9 +99,9 @@ def _fetch_fg_projection_json(proj_type: str, stats: str) -> list[dict]:
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/124.0.0.0 Safari/537.36"
             ),
-            "Accept":          "application/json, text/plain, */*",
+            "Accept": "application/json, text/plain, */*",
             "Accept-Language": "en-US,en;q=0.9",
-            "Referer":         "https://www.fangraphs.com/projections",
+            "Referer": "https://www.fangraphs.com/projections",
         }
         resp = requests.get(url, headers=headers, timeout=30, verify=certifi.where())
         resp.raise_for_status()
@@ -129,8 +132,6 @@ def _fetch_fg_projection_json(proj_type: str, stats: str) -> list[dict]:
         return []
 
 
-
-
 def _hitter_pts_from_proj(row: dict) -> float:
     """Compute fantasy points from a FanGraphs projection row (hitter)."""
     def f(k, *alt):
@@ -143,30 +144,30 @@ def _hitter_pts_from_proj(row: dict) -> float:
                 pass
         return 0.0
 
-    r   = f("R")
-    hr  = f("HR")
+    r = f("R")
+    hr = f("HR")
     rbi = f("RBI")
-    sb  = f("SB")
-    bb  = f("BB")
-    so  = f("SO", "K")
-    h   = f("H")
-    d   = f("2B")
-    t   = f("3B")
-    pa  = f("PA")
+    sb = f("SB")
+    bb = f("BB")
+    so = f("SO", "K")
+    h = f("H")
+    d = f("2B")
+    t = f("3B")
+    pa = f("PA")
     # TB = H + 2B + 2×3B + 3×HR  (singles = 1, 2B = 2, 3B = 3, HR = 4)
-    tb  = f("TB") or (h + d + 2 * t + 3 * hr)
+    tb = f("TB") or (h + d + 2 * t + 3 * hr)
 
-    score  = BATTING_SCORING["R"]   * r
-    score += BATTING_SCORING["HR"]  * hr
-    score += BATTING_SCORING["TB"]  * tb
+    score = BATTING_SCORING["R"] * r
+    score += BATTING_SCORING["HR"] * hr
+    score += BATTING_SCORING["TB"] * tb
     score += BATTING_SCORING["RBI"] * rbi
-    score += BATTING_SCORING["BB"]  * bb
-    score += BATTING_SCORING["SB"]  * sb
-    score += BATTING_SCORING["K"]   * (-so)   # K = -1 pts
+    score += BATTING_SCORING["BB"] * bb
+    score += BATTING_SCORING["SB"] * sb
+    score += BATTING_SCORING["K"] * (-so)  # K = -1 pts
     # GWRBI estimate: ~2% of RBI
     score += BATTING_SCORING["GWRBI"] * (rbi * 0.02)
     # Grand slam estimate: ~0.3% of PA
-    score += BATTING_SCORING["GSHR"]  * (pa * 0.003)
+    score += BATTING_SCORING["GSHR"] * (pa * 0.003)
     return max(0.0, score)
 
 
@@ -182,35 +183,35 @@ def _pitcher_pts_from_proj(row: dict) -> float:
                 pass
         return 0.0
 
-    ip  = f("IP")
-    h   = f("H")
-    er  = f("ER")
-    hr  = f("HR")
-    bb  = f("BB")
-    so  = f("SO", "K")
-    w   = f("W")
-    l   = f("L")
-    sv  = f("SV")
-    hd  = f("HLD", "HD")
-    gs  = f("GS")
-    qs  = f("QS") or (gs * 0.55)   # estimate when not in projection data
-    bs  = f("BS")
+    ip = f("IP")
+    h = f("H")
+    er = f("ER")
+    hr = f("HR")
+    bb = f("BB")
+    so = f("SO", "K")
+    w = f("W")
+    losses = f("L")
+    sv = f("SV")
+    hd = f("HLD", "HD")
+    gs = f("GS")
+    qs = f("QS") or (gs * 0.55)  # estimate when not in projection data
+    bs = f("BS")
 
-    score  = PITCHING_SCORING["IP"]   * ip
-    score += PITCHING_SCORING["H"]    * h
-    score += PITCHING_SCORING["ER"]   * er
-    score += PITCHING_SCORING["HR"]   * hr
-    score += PITCHING_SCORING["BB"]   * bb
-    score += PITCHING_SCORING["K"]    * so
-    score += PITCHING_SCORING["QS"]   * qs
-    score += PITCHING_SCORING["W"]    * w
-    score += PITCHING_SCORING["L"]    * l
-    score += PITCHING_SCORING["SV"]   * sv
-    score += PITCHING_SCORING["BS"]   * bs
-    score += PITCHING_SCORING["HD"]   * hd
+    score = PITCHING_SCORING["IP"] * ip
+    score += PITCHING_SCORING["H"] * h
+    score += PITCHING_SCORING["ER"] * er
+    score += PITCHING_SCORING["HR"] * hr
+    score += PITCHING_SCORING["BB"] * bb
+    score += PITCHING_SCORING["K"] * so
+    score += PITCHING_SCORING["QS"] * qs
+    score += PITCHING_SCORING["W"] * w
+    score += PITCHING_SCORING["L"] * losses
+    score += PITCHING_SCORING["SV"] * sv
+    score += PITCHING_SCORING["BS"] * bs
+    score += PITCHING_SCORING["HD"] * hd
     score += PITCHING_SCORING["SVHD"] * (sv + hd)
-    score += PITCHING_SCORING["CG"]   * (gs * 0.01)
-    score += PITCHING_SCORING["SO"]   * (gs * 0.001)
+    score += PITCHING_SCORING["CG"] * (gs * 0.01)
+    score += PITCHING_SCORING["SO"] * (gs * 0.001)
     return max(0.0, score)
 
 
@@ -234,22 +235,22 @@ def _build_hitter_entry(name: str, steamer_row: dict | None, zips_row: dict | No
 
     # Compute pts for each system
     s_pts = _hitter_pts_from_proj(steamer_row) if steamer_row else 0.0
-    z_pts = _hitter_pts_from_proj(zips_row)    if zips_row    else 0.0
+    z_pts = _hitter_pts_from_proj(zips_row) if zips_row else 0.0
     consensus_pts = _avg(s_pts, z_pts)
 
     return {
-        "name":           name,
-        "steamer_pts":    _c(s_pts, 1),
-        "zips_pts":       _c(z_pts, 1),
-        "consensus_pts":  _c(consensus_pts, 1),
+        "name": name,
+        "steamer_pts": _c(s_pts, 1),
+        "zips_pts": _c(z_pts, 1),
+        "consensus_pts": _c(consensus_pts, 1),
         # Key counting stats (averaged for display)
-        "PA":   _c(_avg(f(steamer_row,"PA"),  f(zips_row,"PA")),  1),
-        "HR":   _c(_avg(f(steamer_row,"HR"),  f(zips_row,"HR")),  1),
-        "R":    _c(_avg(f(steamer_row,"R"),   f(zips_row,"R")),   1),
-        "RBI":  _c(_avg(f(steamer_row,"RBI"), f(zips_row,"RBI")), 1),
-        "SB":   _c(_avg(f(steamer_row,"SB"),  f(zips_row,"SB")),  1),
-        "AVG":  _c(_avg(f(steamer_row,"AVG"), f(zips_row,"AVG"))),
-        "OPS":  _c(_avg(f(steamer_row,"OPS"), f(zips_row,"OPS"))),
+        "PA": _c(_avg(f(steamer_row, "PA"), f(zips_row, "PA")), 1),
+        "HR": _c(_avg(f(steamer_row, "HR"), f(zips_row, "HR")), 1),
+        "R": _c(_avg(f(steamer_row, "R"), f(zips_row, "R")), 1),
+        "RBI": _c(_avg(f(steamer_row, "RBI"), f(zips_row, "RBI")), 1),
+        "SB": _c(_avg(f(steamer_row, "SB"), f(zips_row, "SB")), 1),
+        "AVG": _c(_avg(f(steamer_row, "AVG"), f(zips_row, "AVG"))),
+        "OPS": _c(_avg(f(steamer_row, "OPS"), f(zips_row, "OPS"))),
     }
 
 
@@ -272,34 +273,34 @@ def _build_pitcher_entry(name: str, steamer_row: dict | None, zips_row: dict | N
         return 0.0
 
     s_pts = _pitcher_pts_from_proj(steamer_row) if steamer_row else 0.0
-    z_pts = _pitcher_pts_from_proj(zips_row)    if zips_row    else 0.0
+    z_pts = _pitcher_pts_from_proj(zips_row) if zips_row else 0.0
     consensus_pts = _avg(s_pts, z_pts)
 
     return {
-        "name":           name,
-        "steamer_pts":    _c(s_pts, 1),
-        "zips_pts":       _c(z_pts, 1),
-        "consensus_pts":  _c(consensus_pts, 1),
+        "name": name,
+        "steamer_pts": _c(s_pts, 1),
+        "zips_pts": _c(z_pts, 1),
+        "consensus_pts": _c(consensus_pts, 1),
         # Key counting stats (averaged for display)
-        "IP":   _c(_avg(f(steamer_row,"IP"),  f(zips_row,"IP")),  1),
-        "W":    _c(_avg(f(steamer_row,"W"),   f(zips_row,"W")),   1),
-        "SV":   _c(_avg(f(steamer_row,"SV"),  f(zips_row,"SV")),  1),
-        "HD":   _c(_avg(f(steamer_row,"HLD","HD"), f(zips_row,"HLD","HD")), 1),
-        "ERA":  _c(_avg(f(steamer_row,"ERA"), f(zips_row,"ERA"))),
-        "WHIP": _c(_avg(f(steamer_row,"WHIP"),f(zips_row,"WHIP"))),
-        "SO":   _c(_avg(f(steamer_row,"SO","K"), f(zips_row,"SO","K")), 1),
-        "GS":   _c(_avg(f(steamer_row,"GS"),  f(zips_row,"GS")),  1),
+        "IP": _c(_avg(f(steamer_row, "IP"), f(zips_row, "IP")), 1),
+        "W": _c(_avg(f(steamer_row, "W"), f(zips_row, "W")), 1),
+        "SV": _c(_avg(f(steamer_row, "SV"), f(zips_row, "SV")), 1),
+        "HD": _c(_avg(f(steamer_row, "HLD", "HD"), f(zips_row, "HLD", "HD")), 1),
+        "ERA": _c(_avg(f(steamer_row, "ERA"), f(zips_row, "ERA"))),
+        "WHIP": _c(_avg(f(steamer_row, "WHIP"), f(zips_row, "WHIP"))),
+        "SO": _c(_avg(f(steamer_row, "SO", "K"), f(zips_row, "SO", "K")), 1),
+        "GS": _c(_avg(f(steamer_row, "GS"), f(zips_row, "GS")), 1),
     }
 
 
 def build_projection_cache(force: bool = False, season: int = YEAR) -> dict:
     """Fetch Steamer + ZiPS projections and return the merged cache dict."""
 
-    print(f"\n{'='*60}")
-    print(f"  Fantasy Baseball Projection Cache Builder")
+    print(f"\n{'=' * 60}")
+    print("  Fantasy Baseball Projection Cache Builder")
     print(f"  Target season: {season}")
     print(f"  Output: {CACHE_PATH}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     if not force and _cache_is_fresh(CACHE_PATH):
         age_h = (time.time() - os.path.getmtime(CACHE_PATH)) / 3600
@@ -344,7 +345,7 @@ def build_projection_cache(force: bool = False, season: int = YEAR) -> dict:
     all_hitter_names = set(st_bat_idx) | set(zp_bat_idx)
     all_pitcher_names = set(st_pit_idx) | set(zp_pit_idx)
 
-    hitters  = {}
+    hitters = {}
     pitchers = {}
 
     for nm in all_hitter_names:
@@ -363,22 +364,22 @@ def build_projection_cache(force: bool = False, season: int = YEAR) -> dict:
 
     # ── Step 4: Write cache ───────────────────────────────────────────────────
     cache = {
-        "season":    season,
-        "built_at":  datetime.utcnow().isoformat() + "Z",
-        "sources":   {
+        "season": season,
+        "built_at": datetime.utcnow().isoformat() + "Z",
+        "sources": {
             "steamer_bat": len(st_bat),
             "steamer_pit": len(st_pit),
-            "zips_bat":    len(zp_bat),
-            "zips_pit":    len(zp_pit),
+            "zips_bat": len(zp_bat),
+            "zips_pit": len(zp_pit),
         },
-        "hitters":  hitters,
+        "hitters": hitters,
         "pitchers": pitchers,
     }
 
     with open(CACHE_PATH, "w") as f:
         json.dump(cache, f, separators=(",", ":"))
 
-    print(f"\n  ✓ Projection cache written:")
+    print("\n  ✓ Projection cache written:")
     print(f"    {len(hitters)} hitters · {len(pitchers)} pitchers")
     print(f"    Steamer: {len(st_bat)} bat / {len(st_pit)} pit")
     print(f"    ZiPS:    {len(zp_bat)} bat / {len(zp_pit)} pit")
@@ -389,7 +390,7 @@ def build_projection_cache(force: bool = False, season: int = YEAR) -> dict:
 
 if __name__ == "__main__":
     force_rebuild = "--force" in sys.argv
-    debug_mode    = "--debug" in sys.argv
+    debug_mode = "--debug" in sys.argv
     season_override = YEAR
     for i, arg in enumerate(sys.argv):
         if arg == "--season" and i + 1 < len(sys.argv):
@@ -401,19 +402,26 @@ if __name__ == "__main__":
     if debug_mode:
         # Quick raw-response check — prints the first 500 chars so you can see
         # whether you're getting JSON or HTML before running the full build.
-        import requests, certifi
-        for pt, st in [("steamer","bat"), ("steamer","pit"), ("zips","bat")]:
+        import certifi
+        import requests
+
+        for pt, st in [("steamer", "bat"), ("steamer", "pit"), ("zips", "bat")]:
             url = (
                 f"https://www.fangraphs.com/api/projections"
                 f"?type={pt}&stats={st}&pos=all&team=0&players=0&lg=all"
             )
             try:
-                r = requests.get(url, timeout=20, headers={
-                    "User-Agent": "Mozilla/5.0",
-                    "Accept": "application/json",
-                    "Referer": "https://www.fangraphs.com/projections",
-                }, verify=certifi.where())
-                print(f"\n[{pt}/{st}] status={r.status_code}  CT={r.headers.get('Content-Type','')}")
+                r = requests.get(
+                    url,
+                    timeout=20,
+                    headers={
+                        "User-Agent": "Mozilla/5.0",
+                        "Accept": "application/json",
+                        "Referer": "https://www.fangraphs.com/projections",
+                    },
+                    verify=certifi.where(),
+                )
+                print(f"\n[{pt}/{st}] status={r.status_code}  CT={r.headers.get('Content-Type', '')}")
                 print(r.text[:500])
             except Exception as e:
                 print(f"[{pt}/{st}] error: {e}")
